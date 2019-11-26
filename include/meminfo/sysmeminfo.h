@@ -45,13 +45,14 @@ class SysMemInfo final {
     static constexpr const char kMemVmallocUsed[] = "VmallocUsed:";
     static constexpr const char kMemPageTables[] = "PageTables:";
     static constexpr const char kMemKernelStack[] = "KernelStack:";
+    static constexpr const char kMemKReclaimable[] = "KReclaimable:";
 
     static constexpr std::initializer_list<std::string_view> kDefaultSysMemInfoTags = {
             SysMemInfo::kMemTotal,      SysMemInfo::kMemFree,        SysMemInfo::kMemBuffers,
             SysMemInfo::kMemCached,     SysMemInfo::kMemShmem,       SysMemInfo::kMemSlab,
             SysMemInfo::kMemSReclaim,   SysMemInfo::kMemSUnreclaim,  SysMemInfo::kMemSwapTotal,
             SysMemInfo::kMemSwapFree,   SysMemInfo::kMemMapped,      SysMemInfo::kMemVmallocUsed,
-            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack,
+            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack, SysMemInfo::kMemKReclaimable,
     };
 
     SysMemInfo() = default;
@@ -83,6 +84,7 @@ class SysMemInfo final {
     uint64_t mem_vmalloc_used_kb() { return mem_in_kb_[kMemVmallocUsed]; }
     uint64_t mem_page_tables_kb() { return mem_in_kb_[kMemPageTables]; }
     uint64_t mem_kernel_stack_kb() { return mem_in_kb_[kMemKernelStack]; }
+    uint64_t mem_kreclaimable_kb() { return mem_in_kb_[kMemKReclaimable]; }
     uint64_t mem_zram_kb(const char* zram_dev = nullptr);
 
   private:
