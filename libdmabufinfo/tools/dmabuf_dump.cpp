@@ -69,7 +69,7 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
     }
 
     // Format the header string spaced and separated with '|'
-    printf("    Dmabuf Inode |            Size |      Ref Counts |");
+    printf("    Dmabuf Inode |            Size |   Fd Ref Counts |  Map Ref Counts |");
     for (auto pid : pid_set) {
         printf("%16s:%-5d |", GetProcessComm(pid).c_str(), pid);
     }
@@ -81,8 +81,9 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
 
     // Iterate through all dmabufs and collect per-process sizes, refs
     for (auto& buf : bufs) {
-        printf("%16ju |%13" PRIu64 " kB |%16" PRIu64 " |", static_cast<uintmax_t>(buf.inode()),
-               buf.size() / 1024, buf.total_refs());
+        printf("%16ju |%13" PRIu64 " kB |%16zu |%16zu |",
+               static_cast<uintmax_t>(buf.inode()), buf.size() / 1024, buf.fdrefs().size(),
+               buf.maprefs().size());
         // Iterate through each process to find out per-process references for each buffer,
         // gather total size used by each process etc.
         for (pid_t pid : pid_set) {
