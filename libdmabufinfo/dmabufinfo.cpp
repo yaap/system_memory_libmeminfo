@@ -224,16 +224,15 @@ bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs, const std::string& path) {
         // size     flags       mode        count  exp_name ino         name
         // 01048576 00000002    00000007    00000001    ion 00018758    CAMERA
         // 01048576 00000002    00000007    00000001    ion 00018758
-        uint64_t size, count;
+        uint64_t size, count, inode;
         char* exporter_name = nullptr;
-        ino_t inode;
         char* name = nullptr;
-        int matched = sscanf(line, "%" SCNu64 "%*x %*x %" SCNu64 " %ms %lu %ms", &size, &count,
-                             &exporter_name, &inode, &name);
+        int matched = sscanf(line, "%" SCNu64 "%*x %*x %" SCNu64 " %ms %" SCNu64 " %ms", &size,
+                             &count, &exporter_name, &inode, &name);
         if (matched < 4) {
             continue;
         }
-        dmabufs->emplace_back(inode, size, count, exporter_name, matched > 4 ? name : "");
+        dmabufs->emplace_back((ino_t)inode, size, count, exporter_name, matched > 4 ? name : "");
         free(exporter_name);
         free(name);
     }
