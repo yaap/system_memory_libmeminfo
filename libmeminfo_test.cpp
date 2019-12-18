@@ -555,6 +555,7 @@ Writeback:             0 kB
 AnonPages:         74988 kB
 Mapped:            62624 kB
 Shmem:              4020 kB
+KReclaimable:      87324 kB
 Slab:              86464 kB
 SReclaimable:      44432 kB
 SUnreclaim:        42032 kB
@@ -599,6 +600,7 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mi.mem_vmalloc_used_kb(), 65536);
     EXPECT_EQ(mi.mem_page_tables_kb(), 2900);
     EXPECT_EQ(mi.mem_kernel_stack_kb(), 4880);
+    EXPECT_EQ(mi.mem_kreclaimable_kb(), 87324);
 }
 
 TEST(SysMemInfo, TestEmptyFile) {
@@ -639,6 +641,7 @@ enum {
     MEMINFO_VMALLOC_USED,
     MEMINFO_PAGE_TABLES,
     MEMINFO_KERNEL_STACK,
+    MEMINFO_KRECLAIMABLE,
     MEMINFO_COUNT
 };
 
@@ -664,6 +667,7 @@ Writeback:             0 kB
 AnonPages:         74988 kB
 Mapped:            62624 kB
 Shmem:              4020 kB
+KReclaimable:      87324 kB
 Slab:              86464 kB
 SReclaimable:      44432 kB
 SUnreclaim:        42032 kB
@@ -716,6 +720,7 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mem[MEMINFO_VMALLOC_USED], 65536);
     EXPECT_EQ(mem[MEMINFO_PAGE_TABLES], 2900);
     EXPECT_EQ(mem[MEMINFO_KERNEL_STACK], 4880);
+    EXPECT_EQ(mem[MEMINFO_KRECLAIMABLE], 87324);
 }
 
 TEST(SysMemInfo, TestVmallocInfoNoMemory) {
