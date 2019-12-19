@@ -779,6 +779,32 @@ TEST(SysMemInfo, TestVmallocInfoAll) {
     EXPECT_EQ(ReadVmallocInfo(file.c_str()), 7 * getpagesize());
 }
 
+TEST(SysMemInfo, TestReadIonHeapsSizeKb) {
+    std::string total_heaps_kb = R"total_heaps_kb(98480)total_heaps_kb";
+    uint64_t size;
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(total_heaps_kb, tf.fd));
+    std::string file = std::string(tf.path);
+
+    ASSERT_TRUE(ReadIonHeapsSizeKb(&size, file));
+    EXPECT_EQ(size, 98480);
+}
+
+TEST(SysMemInfo, TestReadIonPoolsSizeKb) {
+    std::string total_pools_kb = R"total_pools_kb(416)total_pools_kb";
+    uint64_t size;
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(total_pools_kb, tf.fd));
+    std::string file = std::string(tf.path);
+
+    ASSERT_TRUE(ReadIonPoolsSizeKb(&size, file));
+    EXPECT_EQ(size, 416);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     ::android::base::InitLogging(argv, android::base::StderrLogger);
