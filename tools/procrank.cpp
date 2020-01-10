@@ -85,7 +85,8 @@ struct ProcessRecord {
 
     bool valid() const { return pid_ != -1; }
 
-    void CalculateSwap(const uint16_t* swap_offset_array, float zram_compression_ratio) {
+    void CalculateSwap(const std::vector<uint16_t>& swap_offset_array,
+                       float zram_compression_ratio) {
         for (auto& off : swap_offsets_) {
             proportional_swap_ += getpagesize() / swap_offset_array[off];
             unique_swap_ += swap_offset_array[off] == 1 ? getpagesize() : 0;
@@ -102,7 +103,7 @@ struct ProcessRecord {
     uint64_t zswap() const { return zswap_; }
 
     // Wrappers to ProcMemInfo
-    const std::vector<uint16_t>& SwapOffsets() const { return swap_offsets_; }
+    const std::vector<uint64_t>& SwapOffsets() const { return swap_offsets_; }
     const MemUsage& Usage() const { return usage_or_wss_; }
     const MemUsage& Wss() const { return usage_or_wss_; }
 
@@ -114,7 +115,7 @@ struct ProcessRecord {
     uint64_t unique_swap_;
     uint64_t zswap_;
     MemUsage usage_or_wss_;
-    std::vector<uint16_t> swap_offsets_;
+    std::vector<uint64_t> swap_offsets_;
 };
 
 // Show working set instead of memory consumption
@@ -177,11 +178,11 @@ static bool read_all_pids(std::vector<pid_t>* pids, std::function<bool(pid_t pid
     return true;
 }
 
-static bool count_swap_offsets(const ProcessRecord& proc, uint16_t* swap_offset_array,
-                               uint32_t size) {
-    const std::vector<uint16_t>& swp_offs = proc.SwapOffsets();
+static bool count_swap_offsets(const ProcessRecord& proc,
+                               std::vector<uint16_t>& swap_offset_array) {
+    const std::vector<uint64_t>& swp_offs = proc.SwapOffsets();
     for (auto& off : swp_offs) {
-        if (off >= size) {
+        if (off >= swap_offset_array.size()) {
             std::cerr << "swap offset " << off << " is out of bounds for process: " << proc.pid()
                       << std::endl;
             return false;
@@ -249,7 +250,7 @@ static void print_process_record(std::stringstream& ss, ProcessRecord& proc) {
 }
 
 static void print_processes(std::stringstream& ss, std::vector<ProcessRecord>& procs,
-                            uint16_t* swap_offset_array) {
+                            const std::vector<uint16_t>& swap_offset_array) {
     for (auto& proc : procs) {
         total_pss += show_wss ? proc.Wss().pss : proc.Usage().pss;
         total_uss += show_wss ? proc.Wss().uss : proc.Usage().uss;
@@ -446,7 +447,7 @@ int main(int argc, char* argv[]) {
     uint64_t swap_total = smi.mem_swap_kb() * 1024;
     has_swap = swap_total > 0;
     // Allocate the swap array
-    auto swap_offset_array = std::make_unique<uint16_t[]>(swap_total / getpagesize());
+    std::vector<uint16_t> swap_offset_array(swap_total / getpagesize() + 1, 0);
     if (has_swap) {
         has_zram = smi.mem_zram_kb() > 0;
         if (has_zram) {
@@ -476,7 +477,7 @@ int main(int argc, char* argv[]) {
 
         // collect swap_offset counts from all processes in 1st pass
         if (!show_wss && has_swap &&
-            !count_swap_offsets(proc, swap_offset_array.get(), swap_total / getpagesize())) {
+            !count_swap_offsets(proc, swap_offset_array)) {
             std::cerr << "Failed to count swap offsets for process: " << pid << std::endl;
             return false;
         }
@@ -515,7 +516,7 @@ int main(int argc, char* argv[]) {
     ss << std::endl;
 
     // 2nd pass to calculate and get per process stats to add them up
-    print_processes(ss, procs, swap_offset_array.get());
+    print_processes(ss, procs, swap_offset_array);
 
     // Add separator to output
     print_separator(ss);
