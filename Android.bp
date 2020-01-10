@@ -55,7 +55,9 @@ cc_library {
 
 cc_test {
     name: "libmeminfo_test",
+    test_suites: ["device-tests"],
     defaults: ["libmeminfo_defaults"],
+    require_root: true,
 
     static_libs: [
         "libmeminfo",
