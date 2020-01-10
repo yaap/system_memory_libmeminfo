@@ -202,7 +202,7 @@ bool ProcMemInfo::SmapsOrRollupPss(uint64_t* pss) const {
     return SmapsOrRollupPssFromFile(path, pss);
 }
 
-const std::vector<uint16_t>& ProcMemInfo::SwapOffsets() {
+const std::vector<uint64_t>& ProcMemInfo::SwapOffsets() {
     if (get_wss_) {
         LOG(WARNING) << "Trying to read process swap offsets for " << pid_
                      << " using invalid object";

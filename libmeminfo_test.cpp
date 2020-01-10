@@ -202,7 +202,7 @@ TEST(ProcMemInfo, SwapOffsetsEmpty) {
     // If we created the object for getting working set,
     // the swap offsets must be empty
     ProcMemInfo proc_mem(pid, true);
-    const std::vector<uint16_t>& swap_offsets = proc_mem.SwapOffsets();
+    const std::vector<uint64_t>& swap_offsets = proc_mem.SwapOffsets();
     EXPECT_EQ(swap_offsets.size(), 0);
 }
 
