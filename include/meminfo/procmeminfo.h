@@ -83,7 +83,7 @@ class ProcMemInfo final {
     // Returns 'true' on success and the value of Pss in the out parameter.
     bool SmapsOrRollupPss(uint64_t* pss) const;
 
-    const std::vector<uint16_t>& SwapOffsets();
+    const std::vector<uint64_t>& SwapOffsets();
 
     // Reads /proc/<pid>/pagemap for this process for each page within
     // the 'vma' and stores that in 'pagemap'. It is assumed that the 'vma'
@@ -106,7 +106,7 @@ class ProcMemInfo final {
     std::vector<Vma> maps_;
 
     MemUsage usage_;
-    std::vector<uint16_t> swap_offsets_;
+    std::vector<uint64_t> swap_offsets_;
 };
 
 // Makes callback for each 'vma' or 'map' found in file provided. The file is expected to be in the
