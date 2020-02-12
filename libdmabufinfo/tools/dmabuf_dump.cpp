@@ -180,8 +180,7 @@ static bool ReadDmaBufs(std::vector<DmaBuffer>* bufs) {
     bufs->clear();
 
     if (!ReadDmaBufInfo(bufs)) {
-        fprintf(stderr, "debugfs entry for dmabuf not available, skipping\n");
-        return false;
+        printf("debugfs entry for dmabuf not available, using /proc/<pid>/fdinfo instead\n");
     }
 
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir("/proc"), closedir);
