@@ -31,3 +31,7 @@ cc_test {
     auto_gen_config: true,
     test_min_api_level: 29,
 }
+
+vts_config {
+    name: "VtsKernelMemInfoTest",
+}
