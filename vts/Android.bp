@@ -27,7 +27,7 @@ cc_test {
 cc_test {
     name: "vts_core_meminfo_test",
     defaults: ["vts_meminfo_defaults"],
-    test_suites: ["vts-core"],
+    test_suites: ["vts"],
     auto_gen_config: true,
     test_min_api_level: 29,
 }
