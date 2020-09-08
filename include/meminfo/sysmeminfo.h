@@ -18,10 +18,12 @@
 
 #include <sys/types.h>
 
+#include <array>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <string>
-#include <vector>
+#include <string_view>
 
 namespace android {
 namespace meminfo {
@@ -29,31 +31,37 @@ namespace meminfo {
 class SysMemInfo final {
     // System or Global memory accounting
   public:
-    static constexpr const char* kMemTotal = "MemTotal:";
-    static constexpr const char* kMemFree = "MemFree:";
-    static constexpr const char* kMemBuffers = "Buffers:";
-    static constexpr const char* kMemCached = "Cached:";
-    static constexpr const char* kMemShmem = "Shmem:";
-    static constexpr const char* kMemSlab = "Slab:";
-    static constexpr const char* kMemSReclaim = "SReclaimable:";
-    static constexpr const char* kMemSUnreclaim = "SUnreclaim:";
-    static constexpr const char* kMemSwapTotal = "SwapTotal:";
-    static constexpr const char* kMemSwapFree = "SwapFree:";
-    static constexpr const char* kMemMapped = "Mapped:";
-    static constexpr const char* kMemVmallocUsed = "VmallocUsed:";
-    static constexpr const char* kMemPageTables = "PageTables:";
-    static constexpr const char* kMemKernelStack = "KernelStack:";
-    static constexpr const char* kMemKReclaimable = "KReclaimable:";
+    static constexpr const char kMemTotal[] = "MemTotal:";
+    static constexpr const char kMemFree[] = "MemFree:";
+    static constexpr const char kMemBuffers[] = "Buffers:";
+    static constexpr const char kMemCached[] = "Cached:";
+    static constexpr const char kMemShmem[] = "Shmem:";
+    static constexpr const char kMemSlab[] = "Slab:";
+    static constexpr const char kMemSReclaim[] = "SReclaimable:";
+    static constexpr const char kMemSUnreclaim[] = "SUnreclaim:";
+    static constexpr const char kMemSwapTotal[] = "SwapTotal:";
+    static constexpr const char kMemSwapFree[] = "SwapFree:";
+    static constexpr const char kMemMapped[] = "Mapped:";
+    static constexpr const char kMemVmallocUsed[] = "VmallocUsed:";
+    static constexpr const char kMemPageTables[] = "PageTables:";
+    static constexpr const char kMemKernelStack[] = "KernelStack:";
+    static constexpr const char kMemKReclaimable[] = "KReclaimable:";
 
-    static const std::vector<std::string> kDefaultSysMemInfoTags;
+    static constexpr std::initializer_list<std::string_view> kDefaultSysMemInfoTags = {
+            SysMemInfo::kMemTotal,      SysMemInfo::kMemFree,        SysMemInfo::kMemBuffers,
+            SysMemInfo::kMemCached,     SysMemInfo::kMemShmem,       SysMemInfo::kMemSlab,
+            SysMemInfo::kMemSReclaim,   SysMemInfo::kMemSUnreclaim,  SysMemInfo::kMemSwapTotal,
+            SysMemInfo::kMemSwapFree,   SysMemInfo::kMemMapped,      SysMemInfo::kMemVmallocUsed,
+            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack, SysMemInfo::kMemKReclaimable,
+    };
 
     SysMemInfo() = default;
 
     // Parse /proc/meminfo and read values that are needed
-    bool ReadMemInfo(const std::string& path = "/proc/meminfo");
-    bool ReadMemInfo(const std::vector<std::string>& tags, std::vector<uint64_t>* out,
-                     const std::string& path = "/proc/meminfo");
-    bool ReadMemInfo(std::vector<uint64_t>* out, const std::string& path = "/proc/meminfo");
+    bool ReadMemInfo(const char* path = "/proc/meminfo");
+    bool ReadMemInfo(size_t ntags, const std::string_view* tags, uint64_t* out,
+                     const char* path = "/proc/meminfo");
+    bool ReadMemInfo(std::vector<uint64_t>* out, const char* path = "/proc/meminfo");
 
     // Parse /proc/vmallocinfo and return total physical memory mapped
     // in vmalloc area by the kernel.
@@ -77,19 +85,19 @@ class SysMemInfo final {
     uint64_t mem_page_tables_kb() { return mem_in_kb_[kMemPageTables]; }
     uint64_t mem_kernel_stack_kb() { return mem_in_kb_[kMemKernelStack]; }
     uint64_t mem_kreclaimable_kb() { return mem_in_kb_[kMemKReclaimable]; }
-    uint64_t mem_zram_kb(const std::string& zram_dev = "");
+    uint64_t mem_zram_kb(const char* zram_dev = nullptr);
 
   private:
-    std::map<std::string, uint64_t> mem_in_kb_;
-    bool MemZramDevice(const std::string& zram_dev, uint64_t* mem_zram_dev);
-    bool ReadMemInfo(const std::vector<std::string>& tags, const std::string& path,
-                     std::function<void(const std::string&, uint64_t)> store_val);
+    std::map<std::string_view, uint64_t> mem_in_kb_;
+    bool MemZramDevice(const char* zram_dev, uint64_t* mem_zram_dev);
+    bool ReadMemInfo(const char* path, size_t ntags, const std::string_view* tags,
+                     std::function<void(std::string_view, uint64_t)> store_val);
 };
 
 // Parse /proc/vmallocinfo and return total physical memory mapped
 // in vmalloc area by the kernel. Note that this deliberately ignores binder buffers. They are
 // _always_ mapped in a process and are counted for in each process.
-uint64_t ReadVmallocInfo(const std::string& path = "/proc/vmallocinfo");
+uint64_t ReadVmallocInfo(const char* path = "/proc/vmallocinfo");
 
 // Read ION heaps allocation size in kb
 bool ReadIonHeapsSizeKb(
