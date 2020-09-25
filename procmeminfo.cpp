@@ -280,11 +280,13 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
     // parse and read /proc/<pid>/maps
     std::string maps_file = ::android::base::StringPrintf("/proc/%d/maps", pid_);
     if (!::android::procinfo::ReadMapFile(
-                maps_file, [&](uint64_t start, uint64_t end, uint16_t flags, uint64_t pgoff, ino_t,
-                               const char* name) {
-                    if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), name) ==
+                maps_file, [&](const android::procinfo::MapInfo& mapinfo) {
+                    if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), mapinfo.name) ==
                             g_excluded_vmas.end()) {
-                        maps_.emplace_back(Vma(start, end, pgoff, flags, name));
+                      maps_.emplace_back(Vma(mapinfo.start, mapinfo.end,
+                                             mapinfo.pgoff, mapinfo.flags,
+                                             mapinfo.name,
+                                             mapinfo.inode, mapinfo.shared));
                     }
                 })) {
         LOG(ERROR) << "Failed to parse " << maps_file;
@@ -471,13 +473,14 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback) {
         // If it has, we are looking for the vma stats
         // 00400000-00409000 r-xp 00000000 fc:00 426998  /usr/lib/gvfs/gvfsd-http
         if (!::android::procinfo::ReadMapFileContent(
-                    line, [&](uint64_t start, uint64_t end, uint16_t flags, uint64_t pgoff, ino_t,
-                              const char* name) {
-                        vma.start = start;
-                        vma.end = end;
-                        vma.flags = flags;
-                        vma.offset = pgoff;
-                        vma.name = name;
+                    line, [&](const android::procinfo::MapInfo& mapinfo) {
+                        vma.start = mapinfo.start;
+                        vma.end = mapinfo.end;
+                        vma.flags = mapinfo.flags;
+                        vma.offset = mapinfo.pgoff;
+                        vma.name = mapinfo.name;
+                        vma.inode = mapinfo.inode;
+                        vma.is_shared = mapinfo.shared;
                     })) {
             LOG(ERROR) << "Failed to parse " << path;
             return false;
