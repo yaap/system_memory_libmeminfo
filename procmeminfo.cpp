@@ -43,7 +43,7 @@ namespace meminfo {
 
 // List of VMA names that we don't want to process:
 //   - On ARM32, [vectors] is a special VMA that is outside of pagemap range.
-static const std::vector<std::string> g_blacklisted_vmas = {"[vectors]"};
+static const std::vector<std::string> g_excluded_vmas = {"[vectors]"};
 
 static void add_mem_usage(MemUsage* to, const MemUsage& from) {
     to->vss += from.vss;
@@ -148,8 +148,8 @@ const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path) {
     }
 
     auto collect_vmas = [&](const Vma& vma) {
-        if (std::find(g_blacklisted_vmas.begin(), g_blacklisted_vmas.end(), vma.name) ==
-                g_blacklisted_vmas.end()) {
+        if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), vma.name) ==
+                g_excluded_vmas.end()) {
             maps_.emplace_back(vma);
         }
     };
@@ -276,8 +276,8 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
     if (!::android::procinfo::ReadMapFile(
                 maps_file, [&](uint64_t start, uint64_t end, uint16_t flags, uint64_t pgoff, ino_t,
                                const char* name) {
-                    if (std::find(g_blacklisted_vmas.begin(), g_blacklisted_vmas.end(), name) ==
-                            g_blacklisted_vmas.end()) {
+                    if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), name) ==
+                            g_excluded_vmas.end()) {
                         maps_.emplace_back(Vma(start, end, pgoff, flags, name));
                     }
                 })) {
