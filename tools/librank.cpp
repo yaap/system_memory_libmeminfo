@@ -150,7 +150,7 @@ struct LibRecord {
 static std::map<std::string, LibRecord> g_libs;
 
 // List of library/map names that we don't want to show by default
-static const std::vector<std::string> g_blacklisted_libs = {"[heap]", "[stack]"};
+static const std::vector<std::string> g_excluded_libs = {"[heap]", "[stack]"};
 
 // Global flags affected by command line
 static uint64_t g_pgflags = 0;
@@ -200,9 +200,9 @@ static bool scan_libs_per_process(pid_t pid) {
             continue;
         }
 
-        // skip blacklisted library / map names
-        if (!g_all_libs && (std::find(g_blacklisted_libs.begin(), g_blacklisted_libs.end(),
-                                      map.name) != g_blacklisted_libs.end())) {
+        // skip excluded library / map names
+        if (!g_all_libs && (std::find(g_excluded_libs.begin(), g_excluded_libs.end(),
+                                      map.name) != g_excluded_libs.end())) {
             continue;
         }
 
