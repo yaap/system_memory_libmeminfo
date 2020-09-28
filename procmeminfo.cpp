@@ -43,7 +43,13 @@ namespace meminfo {
 
 // List of VMA names that we don't want to process:
 //   - On ARM32, [vectors] is a special VMA that is outside of pagemap range.
-static const std::vector<std::string> g_excluded_vmas = {"[vectors]"};
+//   - On x86, [vsyscall] is a kernel memory that is outside of pagemap range.
+static const std::vector<std::string> g_excluded_vmas = {
+    "[vectors]",
+#ifdef __x86_64__
+    "[vsyscall]"
+#endif
+};
 
 static void add_mem_usage(MemUsage* to, const MemUsage& from) {
     to->vss += from.vss;
