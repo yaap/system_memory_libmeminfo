@@ -447,8 +447,13 @@ TEST(ProcMemInfo, SmapsTest) {
     auto vmas = proc_mem.Smaps(path);
 
     ASSERT_FALSE(vmas.empty());
+#ifndef __x86_64__
     // We should get a total of 6 vmas
     ASSERT_EQ(vmas.size(), 6);
+#else
+    // We should get a total of 5 vmas ([vsyscall] is excluded)
+    ASSERT_EQ(vmas.size(), 5);
+#endif
 
     // Expect values to be equal to what we have in testdata1/smaps_short
     // Check for sizes first
@@ -457,7 +462,9 @@ TEST(ProcMemInfo, SmapsTest) {
     EXPECT_EQ(vmas[2].usage.vss, 16896);
     EXPECT_EQ(vmas[3].usage.vss, 260);
     EXPECT_EQ(vmas[4].usage.vss, 6060);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.vss, 4);
+#endif
 
     // Check for names
     EXPECT_EQ(vmas[0].name, "[anon:dalvik-zygote-jit-code-cache]");
@@ -467,70 +474,90 @@ TEST(ProcMemInfo, SmapsTest) {
             << "Unknown map name " << vmas[2].name;
     EXPECT_EQ(vmas[3].name, "/system/priv-app/SettingsProvider/oat/x86_64/SettingsProvider.odex");
     EXPECT_EQ(vmas[4].name, "/system/lib64/libhwui.so");
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].name, "[vsyscall]");
+#endif
 
     EXPECT_EQ(vmas[0].usage.rss, 2048);
     EXPECT_EQ(vmas[1].usage.rss, 11188);
     EXPECT_EQ(vmas[2].usage.rss, 15272);
     EXPECT_EQ(vmas[3].usage.rss, 260);
     EXPECT_EQ(vmas[4].usage.rss, 4132);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.rss, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.pss, 113);
     EXPECT_EQ(vmas[1].usage.pss, 2200);
     EXPECT_EQ(vmas[2].usage.pss, 15272);
     EXPECT_EQ(vmas[3].usage.pss, 260);
     EXPECT_EQ(vmas[4].usage.pss, 1274);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.pss, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.uss, 0);
     EXPECT_EQ(vmas[1].usage.uss, 1660);
     EXPECT_EQ(vmas[2].usage.uss, 15272);
     EXPECT_EQ(vmas[3].usage.uss, 260);
     EXPECT_EQ(vmas[4].usage.uss, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.uss, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.private_clean, 0);
     EXPECT_EQ(vmas[1].usage.private_clean, 0);
     EXPECT_EQ(vmas[2].usage.private_clean, 0);
     EXPECT_EQ(vmas[3].usage.private_clean, 260);
     EXPECT_EQ(vmas[4].usage.private_clean, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.private_clean, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.private_dirty, 0);
     EXPECT_EQ(vmas[1].usage.private_dirty, 1660);
     EXPECT_EQ(vmas[2].usage.private_dirty, 15272);
     EXPECT_EQ(vmas[3].usage.private_dirty, 0);
     EXPECT_EQ(vmas[4].usage.private_dirty, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.private_dirty, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.shared_clean, 0);
     EXPECT_EQ(vmas[1].usage.shared_clean, 80);
     EXPECT_EQ(vmas[2].usage.shared_clean, 0);
     EXPECT_EQ(vmas[3].usage.shared_clean, 0);
     EXPECT_EQ(vmas[4].usage.shared_clean, 4132);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.shared_clean, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.shared_dirty, 2048);
     EXPECT_EQ(vmas[1].usage.shared_dirty, 9448);
     EXPECT_EQ(vmas[2].usage.shared_dirty, 0);
     EXPECT_EQ(vmas[3].usage.shared_dirty, 0);
     EXPECT_EQ(vmas[4].usage.shared_dirty, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.shared_dirty, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.swap, 0);
     EXPECT_EQ(vmas[1].usage.swap, 0);
     EXPECT_EQ(vmas[2].usage.swap, 0);
     EXPECT_EQ(vmas[3].usage.swap, 0);
     EXPECT_EQ(vmas[4].usage.swap, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.swap, 0);
+#endif
 
     EXPECT_EQ(vmas[0].usage.swap_pss, 0);
     EXPECT_EQ(vmas[1].usage.swap_pss, 0);
     EXPECT_EQ(vmas[2].usage.swap_pss, 0);
     EXPECT_EQ(vmas[3].usage.swap_pss, 0);
     EXPECT_EQ(vmas[4].usage.swap_pss, 0);
+#ifndef __x86_64__
     EXPECT_EQ(vmas[5].usage.swap_pss, 0);
+#endif
 }
 
 TEST(SysMemInfo, TestSysMemInfoFile) {
