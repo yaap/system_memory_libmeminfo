@@ -29,10 +29,5 @@ cc_test {
     defaults: ["vts_meminfo_defaults"],
     test_suites: ["vts"],
     require_root: true,
-    auto_gen_config: true,
     test_min_api_level: 29,
-}
-
-vts_config {
-    name: "VtsKernelMemInfoTest",
 }
