@@ -115,5 +115,8 @@ bool ReadIonHeapsSizeKb(
 bool ReadIonPoolsSizeKb(
     uint64_t* size, const std::string& path = "/sys/kernel/ion/total_pools_kb");
 
+// Read GPU total usage size in kb
+bool ReadGpuTotalUsageKb(uint64_t* size);
+
 }  // namespace meminfo
 }  // namespace android
