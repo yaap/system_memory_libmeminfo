@@ -33,6 +33,7 @@ cc_defaults {
 cc_library_static {
     name: "libdmabufinfo",
     vendor_available: true,
+    product_available: true,
     host_supported: true,
     native_bridge_supported: true,
     defaults: ["dmabufinfo_defaults"],
