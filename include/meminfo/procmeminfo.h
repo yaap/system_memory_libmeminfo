@@ -95,8 +95,9 @@ class ProcMemInfo final {
     ~ProcMemInfo() = default;
 
   private:
-    bool ReadMaps(bool get_wss, bool use_pageidle = false, bool get_usage_stats = true);
-    bool ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle);
+    bool ReadMaps(bool get_wss, bool use_pageidle = false, bool get_usage_stats = true,
+                  bool swap_only = false);
+    bool ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle, bool swap_only);
 
     pid_t pid_;
     bool get_wss_;
