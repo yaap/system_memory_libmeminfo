@@ -628,6 +628,9 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mi.mem_page_tables_kb(), 2900);
     EXPECT_EQ(mi.mem_kernel_stack_kb(), 4880);
     EXPECT_EQ(mi.mem_kreclaimable_kb(), 87324);
+    EXPECT_EQ(mi.mem_active_kb(), 445856);
+    EXPECT_EQ(mi.mem_inactive_kb(), 459092);
+    EXPECT_EQ(mi.mem_unevictable_kb(), 3096);
 }
 
 TEST(SysMemInfo, TestEmptyFile) {
@@ -669,6 +672,9 @@ enum {
     MEMINFO_PAGE_TABLES,
     MEMINFO_KERNEL_STACK,
     MEMINFO_KRECLAIMABLE,
+    MEMINFO_ACTIVE,
+    MEMINFO_INACTIVE,
+    MEMINFO_UNEVICTABLE,
     MEMINFO_COUNT
 };
 
@@ -748,6 +754,9 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mem[MEMINFO_PAGE_TABLES], 2900);
     EXPECT_EQ(mem[MEMINFO_KERNEL_STACK], 4880);
     EXPECT_EQ(mem[MEMINFO_KRECLAIMABLE], 87324);
+    EXPECT_EQ(mem[MEMINFO_ACTIVE], 445856);
+    EXPECT_EQ(mem[MEMINFO_INACTIVE], 459092);
+    EXPECT_EQ(mem[MEMINFO_UNEVICTABLE], 3096);
 }
 
 TEST(SysMemInfo, TestVmallocInfoNoMemory) {
