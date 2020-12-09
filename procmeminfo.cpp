@@ -224,7 +224,7 @@ const std::vector<uint64_t>& ProcMemInfo::SwapOffsets() {
         return swap_offsets_;
     }
 
-    if (maps_.empty() && !ReadMaps(get_wss_)) {
+    if (maps_.empty() && !ReadMaps(get_wss_, false, true, true)) {
         LOG(ERROR) << "Failed to get swap offsets for Process " << pid_;
     }
 
@@ -268,7 +268,7 @@ static int GetPagemapFd(pid_t pid) {
     return fd;
 }
 
-bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats) {
+bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats, bool swap_only) {
     // Each object reads /proc/<pid>/maps only once. This is done to make sure programs that are
     // running for the lifetime of the system can recycle the objects and don't have to
     // unnecessarily retain and update this object in memory (which can get significantly large).
@@ -302,7 +302,7 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
     }
 
     for (auto& vma : maps_) {
-        if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss, use_pageidle)) {
+        if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss, use_pageidle, swap_only)) {
             LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start << "-"
                        << vma.end << "]";
             maps_.clear();
@@ -320,7 +320,7 @@ bool ProcMemInfo::FillInVmaStats(Vma& vma) {
         return false;
     }
 
-    if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss_, false)) {
+    if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss_, false, false)) {
         LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start << "-"
                    << vma.end << "]";
         return false;
@@ -328,7 +328,8 @@ bool ProcMemInfo::FillInVmaStats(Vma& vma) {
     return true;
 }
 
-bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle) {
+bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle,
+                               bool swap_only) {
     PageAcct& pinfo = PageAcct::Instance();
     if (get_wss && use_pageidle && !pinfo.InitPageAcct(true)) {
         LOG(ERROR) << "Failed to init idle page accounting";
@@ -383,6 +384,9 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
             swap_offsets_.emplace_back(PAGE_SWAP_OFFSET(page_info));
             continue;
         }
+
+        if (swap_only)
+            continue;
 
         uint64_t page_frame = PAGE_PFN(page_info);
         uint64_t cur_page_flags;
