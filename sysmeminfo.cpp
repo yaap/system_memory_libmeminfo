@@ -28,6 +28,9 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#if defined(__ANDROID__) && !defined(__ANDROID_APEX__)
+#include "bpf/BpfMap.h"
+#endif
 #include <sstream>
 #include <string>
 #include <utility>
@@ -257,6 +260,37 @@ bool ReadIonHeapsSizeKb(uint64_t* size, const std::string& path) {
 
 bool ReadIonPoolsSizeKb(uint64_t* size, const std::string& path) {
     return ReadSysfsFile(path, size);
+}
+
+bool ReadGpuTotalUsageKb(uint64_t* size) {
+#if defined(__ANDROID__) && !defined(__ANDROID_APEX__)
+    static constexpr const char kBpfGpuMemTotalMap[] =
+        "/sys/fs/bpf/map_gpu_mem_gpu_mem_total_map";
+    static constexpr uint64_t kBpfKeyGpuTotalUsage = 0;
+
+    // Use the read-only wrapper BpfMapRO to properly retrieve the read-only map.
+    auto map = bpf::BpfMapRO<uint64_t, uint64_t>(kBpfGpuMemTotalMap);
+    if (!map.isValid()) {
+        LOG(ERROR) << "Can't open file: " << kBpfGpuMemTotalMap;
+        return false;
+    }
+
+    auto res = map.readValue(kBpfKeyGpuTotalUsage);
+    if (!res.ok()) {
+        LOG(ERROR) << "Invalid file format: " << kBpfGpuMemTotalMap;
+        return false;
+    }
+
+    if (size) {
+        *size = res.value() / 1024;
+    }
+    return true;
+#else
+    if (size) {
+        *size = 0;
+    }
+    return false;
+#endif
 }
 
 }  // namespace meminfo
