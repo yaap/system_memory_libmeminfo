@@ -30,6 +30,16 @@ cc_defaults {
         "libdmabufinfo",
     ],
     target: {
+        android: {
+            static_libs: [
+                "libbpf_android",
+            ],
+        },
+        apex: {
+            exclude_static_libs: [
+                "libbpf_android",
+            ],
+        },
         darwin: {
             enabled: false,
         },
