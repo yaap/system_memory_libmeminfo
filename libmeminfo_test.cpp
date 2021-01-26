@@ -841,6 +841,13 @@ TEST(SysMemInfo, TestReadIonPoolsSizeKb) {
     EXPECT_EQ(size, 416);
 }
 
+TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
+    uint64_t size;
+
+    ASSERT_TRUE(ReadGpuTotalUsageKb(&size));
+    EXPECT_TRUE(size >= 0);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     ::android::base::InitLogging(argv, android::base::StderrLogger);
