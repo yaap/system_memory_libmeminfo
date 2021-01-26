@@ -177,22 +177,24 @@ static bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs) {
 
     // Process the map if it is dmabuf. Add map reference to existing object in 'dmabufs'
     // if it was already found. If it wasn't create a new one and append it to 'dmabufs'
-    auto account_dmabuf = [&](uint64_t start, uint64_t end, uint16_t /* flags */,
-                              uint64_t /* pgoff */, ino_t inode, const char* name) {
+    auto account_dmabuf = [&](const android::procinfo::MapInfo& mapinfo) {
         // no need to look into this mapping if it is not dmabuf
-        if (!FileIsDmaBuf(std::string(name))) {
+        if (!FileIsDmaBuf(mapinfo.name)) {
             return;
         }
 
         auto buf = std::find_if(dmabufs->begin(), dmabufs->end(),
-                                [&inode](const DmaBuffer& dbuf) { return dbuf.inode() == inode; });
+                                [&mapinfo](const DmaBuffer& dbuf) {
+                                  return dbuf.inode() == mapinfo.inode;
+                                });
         if (buf != dmabufs->end()) {
             buf->AddMapRef(pid);
             return;
         }
 
         // We have a new buffer, but unknown count and name
-        DmaBuffer& dbuf = dmabufs->emplace_back(inode, end - start, 0, "<unknown>", "<unknown>");
+        DmaBuffer& dbuf = dmabufs->emplace_back(mapinfo.inode, mapinfo.end - mapinfo.start,
+                                                0, "<unknown>", "<unknown>");
         dbuf.AddMapRef(pid);
     };
 
