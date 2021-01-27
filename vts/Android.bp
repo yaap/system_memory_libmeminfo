@@ -17,6 +17,7 @@ cc_defaults {
     defaults: ["libmeminfo_defaults"],
     srcs: ["vts_meminfo_test.cpp"],
     static_libs: ["libmeminfo"],
+    shared_libs: ["libvintf"],
 }
 
 cc_test {
