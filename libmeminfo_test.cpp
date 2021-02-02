@@ -27,14 +27,19 @@
 #include <meminfo/pageacct.h>
 #include <meminfo/procmeminfo.h>
 #include <meminfo/sysmeminfo.h>
+#include <vintf/VintfObject.h>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
+#include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 
 using namespace std;
 using namespace android::meminfo;
+using android::vintf::KernelVersion;
+using android::vintf::RuntimeInfo;
+using android::vintf::VintfObject;
 
 pid_t pid = -1;
 
@@ -843,6 +848,18 @@ TEST(SysMemInfo, TestReadIonPoolsSizeKb) {
 
 TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
     uint64_t size;
+
+    if (android::base::GetIntProperty("ro.product.first_api_level", 0) < __ANDROID_API_S__) {
+        GTEST_SKIP();
+    }
+
+    KernelVersion min_kernel_version = KernelVersion(5, 4, 0);
+    KernelVersion kernel_version = VintfObject::GetInstance()
+                                           ->getRuntimeInfo(RuntimeInfo::FetchFlag::CPU_VERSION)
+                                           ->kernelVersion();
+    if (kernel_version < min_kernel_version) {
+        GTEST_SKIP();
+    }
 
     ASSERT_TRUE(ReadGpuTotalUsageKb(&size));
     EXPECT_TRUE(size >= 0);
