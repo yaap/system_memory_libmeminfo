@@ -82,6 +82,8 @@ cc_test {
         "liblog",
     ],
 
+    shared_libs: ["libvintf"],
+
     srcs: [
         "libmeminfo_test.cpp"
     ],
