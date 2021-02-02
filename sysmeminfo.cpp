@@ -262,6 +262,10 @@ bool ReadIonPoolsSizeKb(uint64_t* size, const std::string& path) {
     return ReadSysfsFile(path, size);
 }
 
+bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& path) {
+    return ReadSysfsFile(path, size);
+}
+
 bool ReadGpuTotalUsageKb(uint64_t* size) {
 #if defined(__ANDROID__) && !defined(__ANDROID_APEX__)
     static constexpr const char kBpfGpuMemTotalMap[] =
