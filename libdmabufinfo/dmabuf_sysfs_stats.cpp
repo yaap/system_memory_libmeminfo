@@ -151,5 +151,33 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysf
 
     return true;
 }
+
+bool GetDmabufTotalExportedKb(unsigned long* total_exported,
+                              const std::string& dmabuf_sysfs_stats_path) {
+    std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dmabuf_sysfs_stats_path.c_str()), closedir);
+    if (!dir) {
+        PLOG(ERROR) << "Unable to access: " << dmabuf_sysfs_stats_path;
+        return false;
+    }
+
+    *total_exported = 0;
+    struct dirent* dent;
+    while ((dent = readdir(dir.get()))) {
+        if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
+
+        std::string buf_entry_path = ::android::base::StringPrintf(
+                "%s/%s", dmabuf_sysfs_stats_path.c_str(), dent->d_name);
+
+        // Read size of the buffer
+        unsigned int buf_size = 0;
+        std::string size_path = buf_entry_path + "/size";
+        if (!ReadUintFromFile(size_path, &buf_size)) return false;
+        *total_exported += buf_size;
+    }
+
+    *total_exported = *total_exported / 1024;
+
+    return true;
+}
 }  // namespace dmabufinfo
 }  // namespace android
