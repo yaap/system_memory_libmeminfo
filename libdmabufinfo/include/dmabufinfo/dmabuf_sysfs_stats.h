@@ -85,5 +85,16 @@ class DmabufSysfsStats {
  */
 bool GetDmabufSysfsStats(DmabufSysfsStats* stats,
                          const std::string& path = "/sys/kernel/dmabuf/buffers");
+
+/*
+ * Calculates the total size of all DMA-BUFs exported. It does not read or parse
+ * the rest of the DMA-BUF sysfs statistics inorder to be performant.
+ *
+ * @path: Not for use by clients, to be used only for unit testing.
+ *
+ * Returns total size of all DMA-BUFs exported in units of KB.
+ */
+bool GetDmabufTotalExportedKb(unsigned long* total_exported,
+                              const std::string& path = "/sys/kernel/dmabuf/buffers");
 }  // namespace dmabufinfo
 }  // namespace android
