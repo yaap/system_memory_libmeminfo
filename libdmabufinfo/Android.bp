@@ -40,6 +40,7 @@ cc_library_static {
     export_include_dirs: ["include"],
     srcs: [
          "dmabufinfo.cpp",
+         "dmabuf_sysfs_stats.cpp",
     ],
     target: {
         darwin: {
@@ -66,5 +67,9 @@ cc_test {
         "libdmabufinfo",
         "libion",
         "libmeminfo",
+    ],
+
+    shared_libs: [
+        "libcutils",
     ],
 }
