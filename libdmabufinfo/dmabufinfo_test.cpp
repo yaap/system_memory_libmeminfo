@@ -20,7 +20,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-#include <unistd.h>
 
 #include <fstream>
 #include <string>
@@ -32,11 +31,15 @@
 #include <android-base/stringprintf.h>
 #include <android-base/unique_fd.h>
 #include <ion/ion.h>
+#include <unistd.h>
 
+#include <dmabufinfo/dmabuf_sysfs_stats.h>
 #include <dmabufinfo/dmabufinfo.h>
 
 using namespace ::android::dmabufinfo;
 using namespace ::android::base;
+
+namespace fs = std::filesystem;
 
 #define MAX_HEAP_NAME 32
 #define ION_HEAP_ANY_MASK (0x7fffffff)
@@ -224,6 +227,81 @@ Total 1 devices attached)bufinfo";
     EXPECT_EQ(dmabufs[1].total_refs(), 0ULL);
     EXPECT_TRUE(dmabufs[1].fdrefs().empty());
     EXPECT_TRUE(dmabufs[1].maprefs().empty());
+}
+
+class DmaBufSysfsStatsParser : public ::testing::Test {
+  public:
+    virtual void SetUp() {
+        fs::current_path(fs::temp_directory_path());
+        buffer_stats_path = fs::current_path() / "buffers";
+        ASSERT_TRUE(fs::create_directory(buffer_stats_path));
+    }
+    virtual void TearDown() { fs::remove_all(buffer_stats_path); }
+
+    std::filesystem::path buffer_stats_path;
+};
+
+TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
+    ASSERT_TRUE(fs::create_directories("buffers/74831/attachments/2"));
+
+    auto buffer_path = buffer_stats_path / "74831";
+
+    auto buffer_size_path = buffer_path / "size";
+    const std::string buffer_size = "4096";
+    ASSERT_TRUE(android::base::WriteStringToFile(buffer_size, buffer_size_path));
+
+    auto exp_name_path = buffer_path / "exporter_name";
+    const std::string exp_name = "system";
+    ASSERT_TRUE(android::base::WriteStringToFile(exp_name, exp_name_path));
+
+    auto attachment_dir = buffer_path / "attachments/2";
+
+    auto device_path = attachment_dir / "device";
+    const std::string device_name = "my_device";
+    fs::create_symlink(device_name, device_path);
+
+    auto map_count_path = attachment_dir / "map_counter";
+    const std::string map_count = "1";
+    ASSERT_TRUE(android::base::WriteStringToFile(map_count, map_count_path));
+
+    DmabufSysfsStats stats;
+    ASSERT_TRUE(GetDmabufSysfsStats(&stats, buffer_stats_path.c_str()));
+
+    auto buffer_stats = stats.buffer_stats();
+    ASSERT_EQ(buffer_stats.size(), 1UL);
+
+    auto buf_info = buffer_stats[0];
+    EXPECT_EQ(buf_info.inode, 74831UL);
+    EXPECT_EQ(buf_info.exp_name, "system");
+    EXPECT_EQ(buf_info.size, 4096UL);
+
+    auto attach_stats = buf_info.attachments;
+    ASSERT_EQ(attach_stats.size(), 1UL);
+    auto attach_info = attach_stats[0];
+    EXPECT_EQ(attach_info.map_count, 1UL);
+
+    EXPECT_EQ(attach_info.device, device_name);
+
+    auto exporter_stats = stats.exporter_info();
+    ASSERT_EQ(exporter_stats.size(), 1UL);
+    auto exp_info = exporter_stats.find("system");
+    ASSERT_TRUE(exp_info != exporter_stats.end());
+    EXPECT_EQ(exp_info->second.size, 4096UL);
+    EXPECT_EQ(exp_info->second.buffer_count, 1UL);
+
+    auto importer_stats = stats.importer_info();
+    ASSERT_EQ(importer_stats.size(), 1UL);
+    auto imp_info = importer_stats.find(device_name);
+    ASSERT_TRUE(imp_info != importer_stats.end());
+
+    EXPECT_EQ(imp_info->second.size, 4096UL);
+    EXPECT_EQ(imp_info->second.buffer_count, 1UL);
+
+    auto total_size = stats.total_size();
+    EXPECT_EQ(total_size, 4096UL);
+
+    auto total_count = stats.total_count();
+    EXPECT_EQ(total_count, 1UL);
 }
 
 class DmaBufTester : public ::testing::Test {
