@@ -1,0 +1,89 @@
+/*
+ * Copyright (C) 2021 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#pragma once
+
+#include <unordered_map>
+#include <vector>
+
+namespace android {
+namespace dmabufinfo {
+
+/*
+ * struct DmabufAttachmentInfo: Information about an attachment on the DMA-BUF.
+ *
+ * @device: Name of the attaching device.
+ * @map_count: The number of distinct mappings of the attachment.
+ */
+struct DmabufAttachmentInfo {
+    std::string device;
+    unsigned int map_count;
+};
+
+/*
+ * struct DmabufInfo: Represents information about a DMA-BUF.
+ *
+ * @inode: The unique inode number for the buffer.
+ * @exp_name: Name of the exporter of the buffer.
+ * @size: Size of the buffer.
+ * @attachments: represents all attachments on the DMA-BUF.
+ */
+struct DmabufInfo {
+    unsigned int inode;
+    std::string exp_name;
+    unsigned int size;
+    std::vector<DmabufAttachmentInfo> attachments;
+};
+
+struct DmabufTotal {
+    unsigned long size;
+    unsigned int buffer_count;
+};
+
+class DmabufSysfsStats {
+  public:
+    inline const std::vector<DmabufInfo>& buffer_stats() const { return buffer_stats_; }
+    inline const std::unordered_map<std::string, struct DmabufTotal>& exporter_info() const {
+        return exporter_info_;
+    }
+    inline const std::unordered_map<std::string, struct DmabufTotal>& importer_info() const {
+        return importer_info_;
+    }
+    inline unsigned long total_size() const { return total_.size; }
+    inline unsigned int total_count() const { return total_.buffer_count; }
+
+    friend bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& path);
+
+  private:
+    std::vector<DmabufInfo> buffer_stats_;
+    std::unordered_map<std::string, struct DmabufTotal> exporter_info_;
+    std::unordered_map<std::string, struct DmabufTotal> importer_info_;
+    struct DmabufTotal total_;
+};
+
+/*
+ * Reads and parses DMA-BUF statistics from sysfs to create per-buffer,
+ * per-exporter and per-importer stats.
+ *
+ * @stats: output argument that will be populated with information from DMA-BUF sysfs stats.
+ * @path: Not for use by clients, to be used only for unit testing.
+ *
+ * Returns true on success.
+ */
+bool GetDmabufSysfsStats(DmabufSysfsStats* stats,
+                         const std::string& path = "/sys/kernel/dmabuf/buffers");
+}  // namespace dmabufinfo
+}  // namespace android
