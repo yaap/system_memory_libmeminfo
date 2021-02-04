@@ -152,7 +152,7 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysf
     return true;
 }
 
-bool GetDmabufTotalExportedKb(unsigned long* total_exported,
+bool GetDmabufTotalExportedKb(uint64_t* total_exported,
                               const std::string& dmabuf_sysfs_stats_path) {
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dmabuf_sysfs_stats_path.c_str()), closedir);
     if (!dir) {
