@@ -32,15 +32,18 @@
 
 #include <android-base/stringprintf.h>
 #include <dmabufinfo/dmabufinfo.h>
+#include <dmabufinfo/dmabuf_sysfs_stats.h>
 
 using DmaBuffer = ::android::dmabufinfo::DmaBuffer;
 
 [[noreturn]] static void usage(int exit_status) {
     fprintf(stderr,
-            "Usage: %s [-ah] [PID] \n"
+            "Usage: %s [-abh] [per-process/per-buffer stats] \n"
             "-a\t show all dma buffers (ion) in big table, [buffer x process] grid \n"
+            "-b\t show DMA-BUF per-buffer, per-exporter and per-device statistics \n"
             "-h\t show this help\n"
-            "  \t If PID is supplied, the dmabuf information for that process is shown.\n",
+            "  \t If PID is supplied, the dmabuf information for that process is shown.\n"
+            "  \t Per-buffer DMA-BUF stats do not take an argument.\n",
             getprogname());
 
     exit(exit_status);
@@ -209,17 +212,75 @@ static bool ReadDmaBufs(std::vector<DmaBuffer>* bufs) {
     return true;
 }
 
+static void DumpDmabufSysfsStats() {
+    android::dmabufinfo::DmabufSysfsStats stats;
+
+    if (!android::dmabufinfo::GetDmabufSysfsStats(&stats)) {
+        printf("Unable to read DMA-BUF sysfs stats from device\n");
+        return;
+    }
+
+    auto buffer_stats = stats.buffer_stats();
+    auto exporter_stats = stats.exporter_info();
+    auto importer_stats = stats.importer_info();
+
+    printf("\n\n----------------------- DMA-BUF per-buffer stats -----------------------\n");
+    printf("    Dmabuf Inode |     Size(bytes) |             Exporter Name             |\n");
+    for (const auto& buf : buffer_stats) {
+        printf("%16u |%16u | %16s \n", buf.inode, buf.size, buf.exp_name.c_str());
+    }
+
+    printf("\n\n----------------------- DMA-BUF attachment stats -----------------------\n");
+    printf("    Dmabuf Inode | Attachment(Map Count)\n");
+    for (const auto& buf : buffer_stats) {
+        printf("%16u", buf.inode);
+
+        if (buf.attachments.empty()) {
+            printf("      None\n");
+            continue;
+        }
+
+        for (const auto& attachment : buf.attachments)
+            printf("%20s(%u) ", attachment.device.c_str(), attachment.map_count);
+        printf("\n");
+    }
+
+    printf("\n\n----------------------- DMA-BUF exporter stats -----------------------\n");
+    printf("      Exporter Name              | Total Count |     Total Size(bytes)   |\n");
+    for (const auto& it : exporter_stats) {
+        printf("%32s | %12u| %16lu\n", it.first.c_str(), it.second.buffer_count, it.second.size);
+    }
+
+    if (!importer_stats.empty()) {
+        printf("\n\n---------------------- DMA-BUF per-device stats ----------------------\n");
+        printf("         Device                  | Total Count |     Total Size(bytes) |\n");
+        for (const auto& it : importer_stats) {
+            printf("%32s | %12u| %16lu\n", it.first.c_str(), it.second.buffer_count,
+                   it.second.size);
+        }
+    }
+
+    printf("\n\n----------------------- DMA-BUF total stats --------------------------\n");
+    printf("Total DMA-BUF count: %u, Total DMA-BUF size(bytes): %lu\n", stats.total_count(),
+           stats.total_size());
+}
+
 int main(int argc, char* argv[]) {
     struct option longopts[] = {{"all", no_argument, nullptr, 'a'},
+                                {"per-buffer", no_argument, nullptr, 'b'},
                                 {"help", no_argument, nullptr, 'h'},
                                 {0, 0, nullptr, 0}};
 
     int opt;
     bool show_table = false;
-    while ((opt = getopt_long(argc, argv, "ah", longopts, nullptr)) != -1) {
+    bool show_dmabuf_sysfs_stats = false;
+    while ((opt = getopt_long(argc, argv, "abh", longopts, nullptr)) != -1) {
         switch (opt) {
             case 'a':
                 show_table = true;
+                break;
+            case 'b':
+                show_dmabuf_sysfs_stats = true;
                 break;
             case 'h':
                 usage(EXIT_SUCCESS);
@@ -230,8 +291,8 @@ int main(int argc, char* argv[]) {
 
     pid_t pid = -1;
     if (optind < argc) {
-        if (show_table) {
-            fprintf(stderr, "Invalid arguments: -a does not need arguments\n");
+        if (show_table || show_dmabuf_sysfs_stats) {
+            fprintf(stderr, "Invalid arguments: -a and -b does not need arguments\n");
             usage(EXIT_FAILURE);
         }
         if (optind != (argc - 1)) {
@@ -243,6 +304,11 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Invalid process id %s\n", argv[optind]);
             usage(EXIT_FAILURE);
         }
+    }
+
+    if (show_dmabuf_sysfs_stats) {
+        DumpDmabufSysfsStats();
+        return 0;
     }
 
     std::vector<DmaBuffer> bufs;
