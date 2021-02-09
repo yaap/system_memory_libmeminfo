@@ -49,7 +49,7 @@ struct DmabufInfo {
 };
 
 struct DmabufTotal {
-    unsigned long size;
+    uint64_t size;
     unsigned int buffer_count;
 };
 
@@ -62,7 +62,7 @@ class DmabufSysfsStats {
     inline const std::unordered_map<std::string, struct DmabufTotal>& importer_info() const {
         return importer_info_;
     }
-    inline unsigned long total_size() const { return total_.size; }
+    inline uint64_t total_size() const { return total_.size; }
     inline unsigned int total_count() const { return total_.buffer_count; }
 
     friend bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& path);
@@ -94,7 +94,7 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats,
  *
  * Returns total size of all DMA-BUFs exported in units of KB.
  */
-bool GetDmabufTotalExportedKb(unsigned long* total_exported,
+bool GetDmabufTotalExportedKb(uint64_t* total_exported,
                               const std::string& path = "/sys/kernel/dmabuf/buffers");
 }  // namespace dmabufinfo
 }  // namespace android
