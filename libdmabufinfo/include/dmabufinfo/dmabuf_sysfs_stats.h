@@ -96,5 +96,14 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats,
  */
 bool GetDmabufTotalExportedKb(uint64_t* total_exported,
                               const std::string& path = "/sys/kernel/dmabuf/buffers");
+
+/* Reads the total mmap count of the DMA buffer with @inode */
+bool ReadBufferTotalMmapCount(unsigned int inode, unsigned int* mmap_count,
+                              const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+
+/* Reads the exporter name of the DMA buffer with @inode */
+bool ReadBufferExporter(unsigned int inode, std::string* exporter,
+                        const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+
 }  // namespace dmabufinfo
 }  // namespace android

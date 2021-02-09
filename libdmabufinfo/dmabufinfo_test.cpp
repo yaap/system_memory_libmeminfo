@@ -29,6 +29,7 @@
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
+#include <android-base/strings.h>
 #include <android-base/unique_fd.h>
 #include <ion/ion.h>
 #include <unistd.h>
@@ -311,6 +312,127 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
     uint64_t total_exported;
     EXPECT_TRUE(GetDmabufTotalExportedKb(&total_exported, buffer_stats_path.c_str()));
     EXPECT_EQ(total_exported, 40UL);
+}
+
+class DmaBufProcessStatsTest : public ::testing::Test {
+  public:
+    virtual void SetUp() {
+        fs::current_path(fs::temp_directory_path());
+        dmabuf_sysfs_path = fs::current_path() / "buffers";
+        procfs_path = fs::current_path() / "proc";
+        ASSERT_TRUE(fs::create_directory(dmabuf_sysfs_path));
+        ASSERT_TRUE(fs::create_directory(procfs_path));
+        pid_path = procfs_path / android::base::StringPrintf("%d", pid);
+        ASSERT_TRUE(fs::create_directories(pid_path));
+        pid_fdinfo_path = pid_path / "fdinfo";
+        ASSERT_TRUE(fs::create_directories(pid_fdinfo_path));
+    }
+    virtual void TearDown() {
+        fs::remove_all(dmabuf_sysfs_path);
+        fs::remove_all(procfs_path);
+    }
+
+    void AddFdInfo(unsigned int inode, unsigned int size, bool is_dmabuf) {
+        std::string dmabuf_fdinfo = android::base::StringPrintf(
+                "size:\t%u\ncount:\t1\nexp_name:\t%s\n", size, exporter.c_str());
+        std::string fdinfo =
+                android::base::StringPrintf("pos:\t21\nflags:\t0032\nmnt_id:\t02\nino:\t%u\n%s",
+                                            inode, (is_dmabuf) ? dmabuf_fdinfo.c_str() : "");
+
+        auto fdinfo_file_path = pid_fdinfo_path / android::base::StringPrintf("%d", fd++);
+        ASSERT_TRUE(android::base::WriteStringToFile(fdinfo, fdinfo_file_path));
+    }
+
+    void AddSysfsDmaBufStats(unsigned int inode, unsigned int size, unsigned int mmap_count) {
+        auto buffer_path = dmabuf_sysfs_path / android::base::StringPrintf("%u", inode);
+        ASSERT_TRUE(fs::create_directory(buffer_path));
+
+        auto size_path = buffer_path / "size";
+        ASSERT_TRUE(android::base::WriteStringToFile(android::base::StringPrintf("%u", size),
+                                                     size_path));
+
+        auto mmap_count_path = buffer_path / "mmap_count";
+        ASSERT_TRUE(android::base::WriteStringToFile(
+                android::base::StringPrintf("%u", mmap_count), mmap_count_path));
+
+        auto exporter_path = buffer_path / "exporter_name";
+        ASSERT_TRUE(android::base::WriteStringToFile(exporter, exporter_path));
+    }
+
+    std::string CreateMapEntry(unsigned int inode, unsigned int size, bool is_dmabuf) {
+        return android::base::StringPrintf("0000000000-%010x rw-s 00000000 00:08 %u %s", size,
+                                           inode, (is_dmabuf) ? "/dmabuf:" : "/not/dmabuf/");
+    }
+
+    void AddMapEntries(std::vector<std::string> entries) {
+        std::string maps_content = android::base::Join(entries, '\n');
+
+        auto maps_file_path = pid_path / "maps";
+        ASSERT_TRUE(android::base::WriteStringToFile(maps_content, maps_file_path));
+    }
+
+    std::filesystem::path dmabuf_sysfs_path;
+    std::filesystem::path procfs_path;
+    std::filesystem::path pid_path;
+    std::filesystem::path pid_fdinfo_path;
+    std::string exporter = "system_heap";
+    int pid = 10;
+    int fd = 0;
+};
+
+TEST_F(DmaBufProcessStatsTest, TestReadDmaBufInfo) {
+    AddFdInfo(1, 1024, false);
+    AddFdInfo(2, 2048, true);  // Dmabuf 1
+
+    std::vector<std::string> map_entries;
+    map_entries.emplace_back(CreateMapEntry(3, 1024, false));
+    map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
+    AddMapEntries(map_entries);
+
+    AddSysfsDmaBufStats(2, 2048, 4);  // Dmabuf 1
+    AddSysfsDmaBufStats(4, 1024, 1);  // Dmabuf 2
+
+    std::vector<DmaBuffer> dmabufs;
+    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs, true, procfs_path, dmabuf_sysfs_path));
+
+    ASSERT_EQ(dmabufs.size(), 2u);
+
+    auto dmabuf1 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 2; });
+    ASSERT_NE(dmabuf1, dmabufs.end());
+    ASSERT_EQ(dmabuf1->size(), 2048u);
+    ASSERT_EQ(dmabuf1->fdrefs().size(), 1u);
+    ASSERT_EQ(dmabuf1->maprefs().size(), 0u);
+    ASSERT_EQ(dmabuf1->total_refs(), 1u);
+    ASSERT_EQ(dmabuf1->exporter(), exporter);
+
+    auto dmabuf2 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 4; });
+    ASSERT_NE(dmabuf2, dmabufs.end());
+    ASSERT_EQ(dmabuf2->size(), 1024u);
+    ASSERT_EQ(dmabuf2->fdrefs().size(), 0u);
+    ASSERT_EQ(dmabuf2->maprefs().size(), 1u);
+    ASSERT_EQ(dmabuf2->total_refs(), 1u);
+    ASSERT_EQ(dmabuf2->exporter(), exporter);
+}
+
+TEST_F(DmaBufProcessStatsTest, TestReadDmaBufPss) {
+    AddFdInfo(1, 1024, false);
+    AddFdInfo(2, 2048, true);  // Dmabuf 1
+
+    std::vector<std::string> map_entries;
+    map_entries.emplace_back(CreateMapEntry(3, 1024, false));
+    map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
+    map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
+    AddMapEntries(map_entries);
+
+    AddSysfsDmaBufStats(2, 2048, 1);  // Dmabuf 1
+    AddSysfsDmaBufStats(4, 1024, 5);  // Dmabuf 2
+
+    uint64_t expected_pss = 2 / 5 * 1024;
+    uint64_t pss = 0;
+    ASSERT_TRUE(ReadDmaBufPss(pid, &pss, procfs_path, dmabuf_sysfs_path));
+    ASSERT_EQ(pss, expected_pss);
 }
 
 class DmaBufTester : public ::testing::Test {
