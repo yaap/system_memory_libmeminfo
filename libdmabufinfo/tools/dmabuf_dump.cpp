@@ -248,20 +248,21 @@ static void DumpDmabufSysfsStats() {
     printf("\n\n----------------------- DMA-BUF exporter stats -----------------------\n");
     printf("      Exporter Name              | Total Count |     Total Size(bytes)   |\n");
     for (const auto& it : exporter_stats) {
-        printf("%32s | %12u| %16lu\n", it.first.c_str(), it.second.buffer_count, it.second.size);
+        printf("%32s | %12u| %" PRIu64 "\n", it.first.c_str(), it.second.buffer_count,
+               it.second.size);
     }
 
     if (!importer_stats.empty()) {
         printf("\n\n---------------------- DMA-BUF per-device stats ----------------------\n");
         printf("         Device                  | Total Count |     Total Size(bytes) |\n");
         for (const auto& it : importer_stats) {
-            printf("%32s | %12u| %16lu\n", it.first.c_str(), it.second.buffer_count,
+            printf("%32s | %12u| %" PRIu64 "\n", it.first.c_str(), it.second.buffer_count,
                    it.second.size);
         }
     }
 
     printf("\n\n----------------------- DMA-BUF total stats --------------------------\n");
-    printf("Total DMA-BUF count: %u, Total DMA-BUF size(bytes): %lu\n", stats.total_count(),
+    printf("Total DMA-BUF count: %u, Total DMA-BUF size(bytes): %" PRIu64 "\n", stats.total_count(),
            stats.total_size());
 }
 

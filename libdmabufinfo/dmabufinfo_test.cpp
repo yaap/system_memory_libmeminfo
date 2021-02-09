@@ -308,7 +308,7 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
     auto total_count = stats.total_count();
     EXPECT_EQ(total_count, 10UL);
 
-    unsigned long total_exported;
+    uint64_t total_exported;
     EXPECT_TRUE(GetDmabufTotalExportedKb(&total_exported, buffer_stats_path.c_str()));
     EXPECT_EQ(total_exported, 40UL);
 }
