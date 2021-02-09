@@ -865,6 +865,19 @@ TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
     EXPECT_TRUE(size >= 0);
 }
 
+TEST(SysMemInfo, TestReadDmaBufHeapPoolsSizeKb) {
+    std::string total_pools_kb = R"total_pools_kb(416)total_pools_kb";
+    uint64_t size;
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(total_pools_kb, tf.fd));
+    std::string file = std::string(tf.path);
+
+    ASSERT_TRUE(ReadDmabufHeapPoolsSizeKb(&size, file));
+    EXPECT_EQ(size, 416);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     ::android::base::InitLogging(argv, android::base::StderrLogger);
