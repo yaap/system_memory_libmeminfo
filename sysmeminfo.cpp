@@ -33,6 +33,7 @@
 #endif
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -42,6 +43,7 @@
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
+#include <dmabufinfo/dmabuf_sysfs_stats.h>
 
 #include "meminfo_private.h"
 
@@ -264,6 +266,39 @@ bool ReadIonPoolsSizeKb(uint64_t* size, const std::string& path) {
 
 bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& path) {
     return ReadSysfsFile(path, size);
+}
+
+bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_root_path,
+                                   const std::string& dmabuf_sysfs_stats_path) {
+    std::unordered_set<std::string> heap_list;
+
+    std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dma_heap_root_path.c_str()), closedir);
+
+    if (dir) {
+        struct dirent* dent;
+        while ((dent = readdir(dir.get()))) {
+            if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
+
+            heap_list.insert(dent->d_name);
+        }
+    }
+
+    if (heap_list.empty()) return false;
+
+    android::dmabufinfo::DmabufSysfsStats stats;
+    if (!android::dmabufinfo::GetDmabufSysfsStats(&stats, dmabuf_sysfs_stats_path)) return false;
+
+    auto exporter_info = stats.exporter_info();
+
+    *size = 0;
+    for (const auto& heap : heap_list) {
+        auto iter = exporter_info.find(heap);
+        if (iter != exporter_info.end()) *size += iter->second.size;
+    }
+
+    *size = *size / 1024;
+
+    return true;
 }
 
 bool ReadGpuTotalUsageKb(uint64_t* size) {
