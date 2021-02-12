@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,8 @@ using namespace android::meminfo;
 using android::vintf::KernelVersion;
 using android::vintf::RuntimeInfo;
 using android::vintf::VintfObject;
+
+namespace fs = std::filesystem;
 
 pid_t pid = -1;
 
@@ -863,6 +866,50 @@ TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
 
     ASSERT_TRUE(ReadGpuTotalUsageKb(&size));
     EXPECT_TRUE(size >= 0);
+}
+
+class DmabufHeapStats : public ::testing::Test {
+  public:
+    virtual void SetUp() {
+        fs::current_path(fs::temp_directory_path());
+        buffer_stats_path = fs::current_path() / "buffers";
+        ASSERT_TRUE(fs::create_directory(buffer_stats_path));
+        heap_root_path = fs::current_path() / "dma_heap";
+        ASSERT_TRUE(fs::create_directory(heap_root_path));
+    }
+    virtual void TearDown() {
+        fs::remove_all(buffer_stats_path);
+        fs::remove_all(heap_root_path);
+    }
+
+    fs::path buffer_stats_path;
+    fs::path heap_root_path;
+};
+
+TEST_F(DmabufHeapStats, TestDmabufHeapTotalExportedKb) {
+    using android::base::StringPrintf;
+    uint64_t size;
+
+    auto system_heap_path = heap_root_path / "system";
+    ASSERT_TRUE(android::base::WriteStringToFile("test", system_heap_path));
+
+    for (unsigned int inode_number = 74831; inode_number < 74841; inode_number++) {
+        auto attach_dir_path = StringPrintf("buffers/%u/attachments", inode_number);
+        ASSERT_TRUE(fs::create_directories(attach_dir_path));
+
+        auto buffer_path = buffer_stats_path / StringPrintf("%u", inode_number);
+
+        auto buffer_size_path = buffer_path / "size";
+        const std::string buffer_size = "4096";
+        ASSERT_TRUE(android::base::WriteStringToFile(buffer_size, buffer_size_path));
+
+        auto exp_name_path = buffer_path / "exporter_name";
+        const std::string exp_name = inode_number % 2 ? "system" : "other";
+        ASSERT_TRUE(android::base::WriteStringToFile(exp_name, exp_name_path));
+    }
+
+    ASSERT_TRUE(ReadDmabufHeapTotalExportedKb(&size, heap_root_path, buffer_stats_path));
+    ASSERT_EQ(size, 20);
 }
 
 TEST(SysMemInfo, TestReadDmaBufHeapPoolsSizeKb) {
