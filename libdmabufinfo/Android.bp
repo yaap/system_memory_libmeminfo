@@ -72,4 +72,6 @@ cc_test {
     shared_libs: [
         "libcutils",
     ],
+    test_suites: ["device-tests"],
+    require_root: true,
 }
