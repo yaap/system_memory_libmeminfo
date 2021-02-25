@@ -200,9 +200,10 @@ const MemUsage& ProcMemInfo::Wss() {
     return usage_;
 }
 
-bool ProcMemInfo::ForEachVma(const VmaCallback& callback) {
-    std::string path = ::android::base::StringPrintf("/proc/%d/smaps", pid_);
-    return ForEachVmaFromFile(path, callback);
+bool ProcMemInfo::ForEachVma(const VmaCallback& callback, bool use_smaps) {
+    std::string path =
+            ::android::base::StringPrintf("/proc/%d/%s", pid_, use_smaps ? "smaps" : "maps");
+    return ForEachVmaFromFile(path, callback, use_smaps);
 }
 
 bool ProcMemInfo::SmapsOrRollup(MemUsage* stats) const {
@@ -443,7 +444,8 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
 }
 
 // Public APIs
-bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback) {
+bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
+                        bool read_smaps_fields) {
     auto fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(path.c_str(), "re"), fclose};
     if (fp == nullptr) {
         return false;
@@ -485,7 +487,12 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback) {
             LOG(ERROR) << "Failed to parse " << path;
             return false;
         }
-        parsing_vma = true;
+        if (read_smaps_fields) {
+            parsing_vma = true;
+        } else {
+            // Done collecting stats, make the call back
+            callback(vma);
+        }
     }
 
     // free getline() managed buffer
