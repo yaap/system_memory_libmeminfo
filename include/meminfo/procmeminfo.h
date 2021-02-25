@@ -58,11 +58,12 @@ class ProcMemInfo final {
     // Each 'struct Vma' is *fully* populated by this method (unlike SmapsOrRollup).
     const std::vector<Vma>& Smaps(const std::string& path = "");
 
-    // This method reads /proc/<pid>/smaps and calls the callback() for each
-    // vma or map that it finds. The map is converted to 'struct Vma' object which is then
+    // If 'use_smaps' is 'true' this method reads /proc/<pid>/smaps and calls the callback()
+    // for each vma or map that it finds, else if 'use_smaps' is false /proc/<pid>/maps is
+    // used instead. Each vma or map found, is converted to 'struct Vma' object which is then
     // passed to the callback.
     // Returns 'false' if the file is malformed.
-    bool ForEachVma(const VmaCallback& callback);
+    bool ForEachVma(const VmaCallback& callback, bool use_smaps = true);
 
     // Used to parse either of /proc/<pid>/{smaps, smaps_rollup} and record the process's
     // Pss and Private memory usage in 'stats'.  In particular, the method only populates the fields
@@ -110,9 +111,13 @@ class ProcMemInfo final {
     std::vector<uint64_t> swap_offsets_;
 };
 
-// Makes callback for each 'vma' or 'map' found in file provided. The file is expected to be in the
-// same format as /proc/<pid>/smaps. Returns 'false' if the file is malformed.
-bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback);
+// Makes callback for each 'vma' or 'map' found in file provided.
+// If 'read_smaps_fields' is 'true', the file is expected to be in the
+// same format as /proc/<pid>/smaps, else the file is expected to be
+// formatted as /proc/<pid>/maps.
+// Returns 'false' if the file is malformed.
+bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
+                        bool read_smaps_fields = true);
 
 // Returns if the kernel supports /proc/<pid>/smaps_rollup. Assumes that the
 // calling process has access to the /proc/<pid>/smaps_rollup.
