@@ -208,13 +208,13 @@ bool ProcMemInfo::ForEachVma(const VmaCallback& callback, bool use_smaps) {
 
 bool ProcMemInfo::SmapsOrRollup(MemUsage* stats) const {
     std::string path = ::android::base::StringPrintf(
-            "/proc/%d/%s", pid_, IsSmapsRollupSupported(pid_) ? "smaps_rollup" : "smaps");
+            "/proc/%d/%s", pid_, IsSmapsRollupSupported() ? "smaps_rollup" : "smaps");
     return SmapsOrRollupFromFile(path, stats);
 }
 
 bool ProcMemInfo::SmapsOrRollupPss(uint64_t* pss) const {
     std::string path = ::android::base::StringPrintf(
-            "/proc/%d/%s", pid_, IsSmapsRollupSupported(pid_) ? "smaps_rollup" : "smaps");
+            "/proc/%d/%s", pid_, IsSmapsRollupSupported() ? "smaps_rollup" : "smaps");
     return SmapsOrRollupPssFromFile(path, pss);
 }
 
@@ -509,7 +509,7 @@ enum smaps_rollup_support { UNTRIED, SUPPORTED, UNSUPPORTED };
 
 static std::atomic<smaps_rollup_support> g_rollup_support = UNTRIED;
 
-bool IsSmapsRollupSupported(pid_t pid) {
+bool IsSmapsRollupSupported() {
     // Similar to OpenSmapsOrRollup checks from android_os_Debug.cpp, except
     // the method only checks if rollup is supported and returns the status
     // right away.
@@ -517,10 +517,9 @@ bool IsSmapsRollupSupported(pid_t pid) {
     if (rollup_support != UNTRIED) {
         return rollup_support == SUPPORTED;
     }
-    std::string rollup_file = ::android::base::StringPrintf("/proc/%d/smaps_rollup", pid);
-    if (access(rollup_file.c_str(), F_OK | R_OK)) {
-        // No check for errno = ENOENT necessary here. The caller MUST fallback to
-        // using /proc/<pid>/smaps instead anyway.
+
+    // Check the calling process for smaps_rollup since it is guaranteed to be alive
+    if (access("/proc/self/smaps_rollup", F_OK | R_OK)) {
         g_rollup_support.store(UNSUPPORTED, std::memory_order_relaxed);
         return false;
     }
