@@ -215,15 +215,9 @@ TEST(ProcMemInfo, SwapOffsetsEmpty) {
 }
 
 TEST(ProcMemInfo, IsSmapsSupportedTest) {
-    // Get any pid and check if /proc/<pid>/smaps_rollup exists using the API.
-    // The API must return the appropriate value regardless of the after it succeeds
-    // once.
-    std::string path = ::android::base::StringPrintf("/proc/%d/smaps_rollup", pid);
-    bool supported = IsSmapsRollupSupported(pid);
-    EXPECT_EQ(!access(path.c_str(), F_OK | R_OK), supported);
-    // Second call must return what the first one returned regardless of the pid parameter.
-    // So, deliberately pass invalid pid.
-    EXPECT_EQ(supported, IsSmapsRollupSupported(-1));
+    // Check if /proc/self/smaps_rollup exists using the API.
+    bool supported = IsSmapsRollupSupported();
+    EXPECT_EQ(!access("/proc/self/smaps_rollup", F_OK | R_OK), supported);
 }
 
 TEST(ProcMemInfo, SmapsOrRollupTest) {

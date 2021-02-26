@@ -32,7 +32,7 @@ namespace meminfo {
 // /proc/<pid>/smaps_rollup support is required.
 TEST(SmapsRollup, IsSupported) {
     // Use init's pid for this test since it's the only known pid.
-    ASSERT_TRUE(IsSmapsRollupSupported(1));
+    ASSERT_TRUE(IsSmapsRollupSupported());
 }
 
 // KReclaimable in /proc/meminfo is required.
