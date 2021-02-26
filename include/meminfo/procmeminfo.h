@@ -121,9 +121,8 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
 
 // Returns if the kernel supports /proc/<pid>/smaps_rollup. Assumes that the
 // calling process has access to the /proc/<pid>/smaps_rollup.
-// Returns 'false' if the calling process has no permission to read the file if it exists
-// of if the file doesn't exist.
-bool IsSmapsRollupSupported(pid_t pid);
+// Returns 'false' if the file doesn't exist.
+bool IsSmapsRollupSupported();
 
 // Same as ProcMemInfo::SmapsOrRollup but reads the statistics directly
 // from a file. The file MUST be in the same format as /proc/<pid>/smaps
