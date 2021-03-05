@@ -65,6 +65,10 @@ class ProcMemInfo final {
     // Returns 'false' if the file is malformed.
     bool ForEachVma(const VmaCallback& callback, bool use_smaps = true);
 
+    // Reads all VMAs from /proc/<pid>/maps and calls the callback() for each one of them.
+    // Returns false in case of failure during parsing.
+    bool ForEachVmaFromMaps(const VmaCallback& callback);
+
     // Used to parse either of /proc/<pid>/{smaps, smaps_rollup} and record the process's
     // Pss and Private memory usage in 'stats'.  In particular, the method only populates the fields
     // of the MemUsage structure that are intended to be used by Android's periodic Pss collection.
