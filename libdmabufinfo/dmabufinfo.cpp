@@ -97,7 +97,8 @@ static bool ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::string* 
     return true;
 }
 
-static bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
+// Public methods
+bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
                              const std::string& procfs_path) {
     std::string fdinfo_dir_path =
             ::android::base::StringPrintf("%s/%d/fdinfo", procfs_path.c_str(), pid);
@@ -163,7 +164,7 @@ static bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
     return true;
 }
 
-static bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
+bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
                               const std::string& procfs_path,
                               const std::string& dmabuf_sysfs_path) {
     std::string mapspath = ::android::base::StringPrintf("%s/%d/maps", procfs_path.c_str(), pid);
@@ -214,7 +215,6 @@ static bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
     return true;
 }
 
-// Public methods
 bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs, const std::string& path) {
     auto fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(path.c_str(), "re"), fclose};
     if (fp == nullptr) {
@@ -252,11 +252,7 @@ bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs, const std::string& path) {
 bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs,
                     const std::string& procfs_path, const std::string& dmabuf_sysfs_path) {
     dmabufs->clear();
-    return AppendDmaBufInfo(pid, dmabufs, read_fdrefs, procfs_path, dmabuf_sysfs_path);
-}
 
-bool AppendDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs,
-                      const std::string& procfs_path, const std::string& dmabuf_sysfs_path) {
     if (read_fdrefs) {
         if (!ReadDmaBufFdRefs(pid, dmabufs, procfs_path)) {
             LOG(ERROR) << "Failed to read dmabuf fd references";

@@ -202,8 +202,14 @@ static bool ReadDmaBufs(std::vector<DmaBuffer>* bufs) {
             continue;
         }
 
-        if (!AppendDmaBufInfo(pid, bufs)) {
-            fprintf(stderr, "Unable to read dmabuf info for pid %d\n", pid);
+        if (!ReadDmaBufFdRefs(pid, bufs)) {
+            fprintf(stderr, "Failed to read dmabuf fd references for pid %d\n", pid);
+            bufs->clear();
+            return false;
+        }
+
+        if (!ReadDmaBufMapRefs(pid, bufs)) {
+            fprintf(stderr, "Failed to read dmabuf map references for pid %d\n", pid);
             bufs->clear();
             return false;
         }
