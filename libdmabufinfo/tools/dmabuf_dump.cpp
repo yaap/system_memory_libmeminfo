@@ -90,17 +90,17 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
         // Iterate through each process to find out per-process references for each buffer,
         // gather total size used by each process etc.
         for (pid_t pid : pid_set) {
-            int pid_refs = 0;
+            int pid_fdrefs = 0, pid_maprefs = 0;
             if (buf.fdrefs().count(pid) == 1) {
                 // Get the total number of ref counts the process is holding
                 // on this buffer. We don't differentiate between mmap or fd.
-                pid_refs += buf.fdrefs().at(pid);
-                if (buf.maprefs().count(pid) == 1) {
-                    pid_refs += buf.maprefs().at(pid);
-                }
+                pid_fdrefs += buf.fdrefs().at(pid);
+            }
+            if (buf.maprefs().count(pid) == 1) {
+                pid_maprefs += buf.maprefs().at(pid);
             }
 
-            if (pid_refs) {
+            if (pid_fdrefs || pid_maprefs) {
                 // Add up the per-pid total size. Note that if a buffer is mapped
                 // in 2 different processes, the size will be shown as mapped or opened
                 // in both processes. This is intended for visibility.
@@ -108,7 +108,7 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
                 // If one wants to get the total *unique* dma buffers, they can simply
                 // sum the size of all dma bufs shown by the tool
                 per_pid_size[pid] += buf.size() / 1024;
-                printf("%17d refs |", pid_refs);
+                printf("%9d(%6d) refs |", pid_fdrefs, pid_maprefs);
             } else {
                 printf("%22s |", "--");
             }
@@ -118,7 +118,7 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
     }
 
     printf("------------------------------------\n");
-    printf("%-16s  %13" PRIu64 " kB |%16s |", "TOTALS", dmabuf_total_size, "n/a");
+    printf("%-16s  %13" PRIu64 " kB |%16s |%16s |", "TOTALS", dmabuf_total_size, "n/a", "n/a");
     for (auto pid : pid_set) {
         printf("%19" PRIu64 " kB |", per_pid_size[pid]);
     }
