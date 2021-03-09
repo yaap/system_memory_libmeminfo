@@ -435,6 +435,95 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufPss) {
     ASSERT_EQ(pss, expected_pss);
 }
 
+TEST_F(DmaBufProcessStatsTest, TestReadDmaBufFdRefs) {
+    AddFdInfo(1, 1024, false);
+    AddFdInfo(2, 2048, true);  // Dmabuf 1
+    AddFdInfo(2, 2048, true);  // Dmabuf 1
+    AddFdInfo(3, 1024, true);  // Dmabuf 2
+
+    std::vector<DmaBuffer> dmabufs;
+    ASSERT_TRUE(ReadDmaBufFdRefs(pid, &dmabufs, procfs_path));
+    ASSERT_EQ(dmabufs.size(), 2u);
+
+    const auto& dmabuf1 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                       [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 2; });
+
+    ASSERT_EQ(dmabuf1->size(), 2048u);
+    ASSERT_EQ(dmabuf1->fdrefs().size(), 1u);  // Only one process has FDs to this buffer
+    ASSERT_EQ(dmabuf1->maprefs().size(), 0u);
+    ASSERT_EQ(dmabuf1->total_refs(), 2u);
+    ASSERT_EQ(dmabuf1->exporter(), exporter);
+
+    // Verify process has 2 FDs to this buffer
+    ASSERT_NE(dmabuf1, dmabufs.end());
+    const auto& fdrefs1 = dmabuf1->fdrefs();
+    const auto& pid_fdrefs1 = fdrefs1.find(pid);
+    ASSERT_NE(pid_fdrefs1, fdrefs1.end());
+    ASSERT_EQ(pid_fdrefs1->second, 2);
+
+    const auto& dmabuf2 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                       [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 3; });
+    ASSERT_EQ(dmabuf2->size(), 1024u);
+    ASSERT_EQ(dmabuf2->fdrefs().size(), 1u);  // Only one process has FDs to this buffer
+    ASSERT_EQ(dmabuf2->maprefs().size(), 0u);
+    ASSERT_EQ(dmabuf2->total_refs(), 1u);
+    ASSERT_EQ(dmabuf2->exporter(), exporter);
+
+    // Verify process only has 1 FD to this buffer
+    ASSERT_NE(dmabuf2, dmabufs.end());
+    const auto& fdrefs2 = dmabuf2->fdrefs();
+    const auto& pid_fdrefs2 = fdrefs2.find(pid);
+    ASSERT_NE(pid_fdrefs2, fdrefs2.end());
+    ASSERT_EQ(pid_fdrefs2->second, 1);
+}
+
+TEST_F(DmaBufProcessStatsTest, TestReadDmaBufMapRefs) {
+    std::vector<std::string> map_entries;
+    map_entries.emplace_back(CreateMapEntry(1, 1024, false));
+    map_entries.emplace_back(CreateMapEntry(2, 1024, true));  // Dmabuf 1
+    map_entries.emplace_back(CreateMapEntry(2, 1024, true));  // Dmabuf 1
+    map_entries.emplace_back(CreateMapEntry(3, 2048, true));  // Dmabuf 2
+    AddMapEntries(map_entries);
+
+    AddSysfsDmaBufStats(2, 1024, 2);  // Dmabuf 1
+    AddSysfsDmaBufStats(3, 1024, 1);  // Dmabuf 2
+
+    std::vector<DmaBuffer> dmabufs;
+    ASSERT_TRUE(ReadDmaBufMapRefs(pid, &dmabufs, procfs_path, dmabuf_sysfs_path));
+    ASSERT_EQ(dmabufs.size(), 2u);
+
+    const auto& dmabuf1 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                       [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 2; });
+
+    ASSERT_EQ(dmabuf1->size(), 1024u);
+    ASSERT_EQ(dmabuf1->fdrefs().size(), 0u);
+    ASSERT_EQ(dmabuf1->maprefs().size(), 1u);  // Only one process mapped this buffer
+    ASSERT_EQ(dmabuf1->total_refs(), 2u);
+    ASSERT_EQ(dmabuf1->exporter(), exporter);
+
+    // Verify process mapped this buffer twice
+    ASSERT_NE(dmabuf1, dmabufs.end());
+    const auto& maprefs1 = dmabuf1->maprefs();
+    const auto& pid_maprefs1 = maprefs1.find(pid);
+    ASSERT_NE(pid_maprefs1, maprefs1.end());
+    ASSERT_EQ(pid_maprefs1->second, 2);
+
+    const auto& dmabuf2 = std::find_if(dmabufs.begin(), dmabufs.end(),
+                                       [](const DmaBuffer& dmabuf) { return dmabuf.inode() == 3; });
+    ASSERT_EQ(dmabuf2->size(), 2048u);
+    ASSERT_EQ(dmabuf2->fdrefs().size(), 0u);
+    ASSERT_EQ(dmabuf2->maprefs().size(), 1u);  // Only one process mapped this buffer
+    ASSERT_EQ(dmabuf2->total_refs(), 1u);
+    ASSERT_EQ(dmabuf2->exporter(), exporter);
+
+    // Verify process mapped this buffer only once
+    ASSERT_NE(dmabuf2, dmabufs.end());
+    const auto& maprefs2 = dmabuf2->maprefs();
+    const auto& pid_maprefs2 = maprefs2.find(pid);
+    ASSERT_NE(pid_maprefs2, maprefs2.end());
+    ASSERT_EQ(pid_maprefs2->second, 1);
+}
+
 class DmaBufTester : public ::testing::Test {
   public:
     DmaBufTester() : ion_fd(ion_open()), ion_heap_mask(get_ion_heap_mask()) {}
