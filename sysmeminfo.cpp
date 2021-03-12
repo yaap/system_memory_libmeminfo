@@ -264,23 +264,42 @@ bool ReadIonPoolsSizeKb(uint64_t* size, const std::string& path) {
     return ReadSysfsFile(path, size);
 }
 
-bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& path) {
-    return ReadSysfsFile(path, size);
+bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& dma_heap_pool_size_path) {
+    static bool support_dmabuf_heap_pool_size = [dma_heap_pool_size_path]() -> bool {
+        bool ret = (access(dma_heap_pool_size_path.c_str(), R_OK) == 0);
+        if (!ret)
+            LOG(ERROR) << "Unable to read DMA-BUF heap total pool size, read ION total pool "
+                          "size instead.";
+        return ret;
+    }();
+
+    if (!support_dmabuf_heap_pool_size) return ReadIonPoolsSizeKb(size);
+
+    return ReadSysfsFile(dma_heap_pool_size_path, size);
 }
 
 bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_root_path,
                                    const std::string& dmabuf_sysfs_stats_path) {
-    std::unordered_set<std::string> heap_list;
+    static bool support_dmabuf_heaps = [dma_heap_root_path]() -> bool {
+        bool ret = (access(dma_heap_root_path.c_str(), R_OK) == 0);
+        if (!ret) LOG(ERROR) << "DMA-BUF heaps not supported, read ION heap total instead.";
+        return ret;
+    }();
+
+    if (!support_dmabuf_heaps) return ReadIonHeapsSizeKb(size);
 
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dma_heap_root_path.c_str()), closedir);
 
-    if (dir) {
-        struct dirent* dent;
-        while ((dent = readdir(dir.get()))) {
-            if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
+    if (!dir) {
+        return false;
+    }
 
-            heap_list.insert(dent->d_name);
-        }
+    std::unordered_set<std::string> heap_list;
+    struct dirent* dent;
+    while ((dent = readdir(dir.get()))) {
+        if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
+
+        heap_list.insert(dent->d_name);
     }
 
     if (heap_list.empty()) return false;
