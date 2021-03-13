@@ -54,7 +54,18 @@ TEST(SysMemInfo, TestIonTotalHeapsKb) {
     if (android::base::GetIntProperty("ro.product.first_api_level", 0) < __ANDROID_API_R__) {
         GTEST_SKIP();
     }
-    ASSERT_TRUE(ReadIonHeapsSizeKb(&size));
+
+    KernelVersion max_kernel_version = KernelVersion(5, 10, 0);
+    KernelVersion kernel_version =
+            android::vintf::VintfObject::GetInstance()
+                    ->getRuntimeInfo(android::vintf::RuntimeInfo::FetchFlag::CPU_VERSION)
+                    ->kernelVersion();
+
+    if (kernel_version < max_kernel_version) {
+        ASSERT_TRUE(ReadIonHeapsSizeKb(&size));
+    } else {
+        GTEST_SKIP();
+    }
 }
 
 // /sys/kernel/ion/total_pools_kb support is required.
@@ -64,7 +75,18 @@ TEST(SysMemInfo, TestIonTotalPoolsKb) {
     if (android::base::GetIntProperty("ro.product.first_api_level", 0) < __ANDROID_API_R__) {
         GTEST_SKIP();
     }
-    ASSERT_TRUE(ReadIonPoolsSizeKb(&size));
+
+    KernelVersion max_kernel_version = KernelVersion(5, 10, 0);
+    KernelVersion kernel_version =
+            android::vintf::VintfObject::GetInstance()
+                    ->getRuntimeInfo(android::vintf::RuntimeInfo::FetchFlag::CPU_VERSION)
+                    ->kernelVersion();
+
+    if (kernel_version < max_kernel_version) {
+        ASSERT_TRUE(ReadIonPoolsSizeKb(&size));
+    } else {
+        GTEST_SKIP();
+    }
 }
 
 // /sys/fs/bpf/map_gpu_mem_gpu_mem_total_map support is required for devices launching with
