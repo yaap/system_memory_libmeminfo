@@ -503,6 +503,8 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
                         vma.inode = mapinfo.inode;
                         vma.is_shared = mapinfo.shared;
                     })) {
+            // free getline() managed buffer
+            free(line);
             LOG(ERROR) << "Failed to parse " << path;
             return false;
         }
