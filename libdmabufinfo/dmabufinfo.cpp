@@ -44,15 +44,24 @@ static bool FileIsDmaBuf(const std::string& path) {
     return ::android::base::StartsWith(path, "/dmabuf");
 }
 
-static bool ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::string* exporter,
+enum FdInfoResult {
+  OK,
+  NOT_FOUND,
+  ERROR,
+};
+
+static FdInfoResult ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::string* exporter,
                              uint64_t* count, uint64_t* size, uint64_t* inode, bool* is_dmabuf_file,
                              const std::string& procfs_path) {
     std::string fdinfo =
             ::android::base::StringPrintf("%s/%d/fdinfo/%d", procfs_path.c_str(), pid, fd);
     auto fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(fdinfo.c_str(), "re"), fclose};
     if (fp == nullptr) {
+        if (errno == ENOENT) {
+          return NOT_FOUND;
+        }
         PLOG(ERROR) << "Failed to open " << fdinfo;
-        return false;
+        return ERROR;
     }
 
     char* line = nullptr;
@@ -94,7 +103,7 @@ static bool ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::string* 
     }
 
     free(line);
-    return true;
+    return OK;
 }
 
 // Public methods
@@ -123,8 +132,12 @@ bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
         uint64_t inode = -1;
         bool is_dmabuf_file = false;
 
-        if (!ReadDmaBufFdInfo(pid, fd, &name, &exporter, &count, &size, &inode, &is_dmabuf_file,
-                              procfs_path)) {
+        auto fdinfo_result = ReadDmaBufFdInfo(pid, fd, &name, &exporter, &count, &size, &inode,
+                                              &is_dmabuf_file, procfs_path);
+        if (fdinfo_result != OK) {
+            if (fdinfo_result == NOT_FOUND) {
+              continue;
+            }
             LOG(ERROR) << "Failed to read fd info for pid: " << pid << ", fd: " << fd;
             return false;
         }
@@ -138,6 +151,9 @@ bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
 
             struct stat sb;
             if (stat(fd_path.c_str(), &sb) < 0) {
+                if (errno == ENOENT) {
+                  continue;
+                }
                 PLOG(ERROR) << "Failed to stat: " << fd_path;
                 return false;
             }
