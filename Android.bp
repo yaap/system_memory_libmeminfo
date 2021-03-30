@@ -44,6 +44,11 @@ cc_defaults {
                 "libbpf_android",
             ],
         },
+	vendor: {
+	    exclude_static_libs: [
+	        "libbpf_android",
+	    ],
+	},
         darwin: {
             enabled: false,
         },
@@ -55,6 +60,7 @@ cc_library {
     name: "libmeminfo",
     host_supported: true,
     native_bridge_supported: true,
+    vendor_available: true,
     defaults: ["libmeminfo_defaults"],
     export_include_dirs: [
         "include",
