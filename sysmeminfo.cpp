@@ -28,7 +28,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
-#if defined(__ANDROID__) && !defined(__ANDROID_APEX__)
+#if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
 #include "bpf/BpfMap.h"
 #endif
 #include <sstream>
@@ -321,7 +321,7 @@ bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_r
 }
 
 bool ReadGpuTotalUsageKb(uint64_t* size) {
-#if defined(__ANDROID__) && !defined(__ANDROID_APEX__)
+#if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
     static constexpr const char kBpfGpuMemTotalMap[] =
         "/sys/fs/bpf/map_gpu_mem_gpu_mem_total_map";
     static constexpr uint64_t kBpfKeyGpuTotalUsage = 0;
