@@ -45,9 +45,9 @@ static bool FileIsDmaBuf(const std::string& path) {
 }
 
 enum FdInfoResult {
-  OK,
-  NOT_FOUND,
-  ERROR,
+    OK,
+    NOT_FOUND,
+    ERROR,
 };
 
 static FdInfoResult ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::string* exporter,
@@ -58,7 +58,7 @@ static FdInfoResult ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::
     auto fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(fdinfo.c_str(), "re"), fclose};
     if (fp == nullptr) {
         if (errno == ENOENT) {
-          return NOT_FOUND;
+            return NOT_FOUND;
         }
         PLOG(ERROR) << "Failed to open " << fdinfo;
         return ERROR;
@@ -109,11 +109,23 @@ static FdInfoResult ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::
 // Public methods
 bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
                              const std::string& procfs_path) {
+    constexpr char permission_err_msg[] =
+            "Failed to read fdinfo - requires either PTRACE_MODE_READ or root depending on "
+            "the device kernel";
+    static bool logged_permission_err = false;
+
     std::string fdinfo_dir_path =
             ::android::base::StringPrintf("%s/%d/fdinfo", procfs_path.c_str(), pid);
     std::unique_ptr<DIR, decltype(&closedir)> dir(opendir(fdinfo_dir_path.c_str()), &closedir);
     if (!dir) {
-        PLOG(ERROR) << "Failed to open " << fdinfo_dir_path << " directory";
+        // Don't log permission errors to reduce log spam on devices where fdinfo
+        // of other processes can only be read by root.
+        if (errno != EACCES) {
+            PLOG(ERROR) << "Failed to open " << fdinfo_dir_path << " directory";
+        } else if (!logged_permission_err) {
+            LOG(ERROR) << permission_err_msg;
+            logged_permission_err = true;
+        }
         return false;
     }
     struct dirent* dent;
@@ -136,9 +148,16 @@ bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
                                               &is_dmabuf_file, procfs_path);
         if (fdinfo_result != OK) {
             if (fdinfo_result == NOT_FOUND) {
-              continue;
+                continue;
             }
-            LOG(ERROR) << "Failed to read fd info for pid: " << pid << ", fd: " << fd;
+            // Don't log permission errors to reduce log spam when the process doesn't
+            // have the PTRACE_MODE_READ permission.
+            if (errno != EACCES) {
+                LOG(ERROR) << "Failed to read fd info for pid: " << pid << ", fd: " << fd;
+            } else if (!logged_permission_err) {
+                LOG(ERROR) << permission_err_msg;
+                logged_permission_err = true;
+            }
             return false;
         }
         if (!is_dmabuf_file) {
