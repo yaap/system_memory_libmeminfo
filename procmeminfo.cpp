@@ -434,6 +434,10 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
             return false;
         }
 
+        if (KPAGEFLAG_THP(cur_page_flags)) {
+            vma.usage.thp += pagesz;
+        }
+
         // skip unwanted pages from the count
         if ((cur_page_flags & pgflags_mask_) != pgflags_) continue;
 
