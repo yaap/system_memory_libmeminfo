@@ -40,6 +40,12 @@ struct MemUsage {
     uint64_t shared_clean;
     uint64_t shared_dirty;
 
+    uint64_t anon_huge_pages;
+    uint64_t shmem_pmd_mapped;
+    uint64_t file_pmd_mapped;
+    uint64_t shared_hugetlb;
+    uint64_t private_hugetlb;
+
     MemUsage()
         : vss(0),
           rss(0),
@@ -50,7 +56,12 @@ struct MemUsage {
           private_clean(0),
           private_dirty(0),
           shared_clean(0),
-          shared_dirty(0) {}
+          shared_dirty(0),
+          anon_huge_pages(0),
+          shmem_pmd_mapped(0),
+          file_pmd_mapped(0),
+          shared_hugetlb(0),
+          private_hugetlb(0) {}
 
     ~MemUsage() = default;
 
