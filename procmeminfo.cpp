@@ -68,10 +68,13 @@ static void add_mem_usage(MemUsage* to, const MemUsage& from) {
 
 // Returns true if the line was valid smaps stats line false otherwise.
 static bool parse_smaps_field(const char* line, MemUsage* stats) {
-    const char *end = strchr(line, ' ');
-    if (end && end > line && *(end - 1) == ':') {
+    const char *end = line;
+
+    // https://lore.kernel.org/patchwork/patch/1088579/ introduced tabs. Handle this case as well.
+    while (*end && !isspace(*end)) end++;
+    if (*end && end > line && *(end - 1) == ':') {
         const char* c = end;
-        while (*c == ' ') c++;
+        while (isspace(*c)) c++;
         switch (line[0]) {
             case 'P':
                 if (strncmp(line, "Pss:", 4) == 0) {
