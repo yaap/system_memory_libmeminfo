@@ -416,25 +416,6 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufInfo) {
     ASSERT_EQ(dmabuf2->exporter(), exporter);
 }
 
-TEST_F(DmaBufProcessStatsTest, TestReadDmaBufPss) {
-    AddFdInfo(1, 1024, false);
-    AddFdInfo(2, 2048, true);  // Dmabuf 1
-
-    std::vector<std::string> map_entries;
-    map_entries.emplace_back(CreateMapEntry(3, 1024, false));
-    map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
-    map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
-    AddMapEntries(map_entries);
-
-    AddSysfsDmaBufStats(2, 2048, 1);  // Dmabuf 1
-    AddSysfsDmaBufStats(4, 1024, 5);  // Dmabuf 2
-
-    uint64_t expected_pss = 2 / 5 * 1024;
-    uint64_t pss = 0;
-    ASSERT_TRUE(ReadDmaBufPss(pid, &pss, procfs_path, dmabuf_sysfs_path));
-    ASSERT_EQ(pss, expected_pss);
-}
-
 TEST_F(DmaBufProcessStatsTest, TestReadDmaBufFdRefs) {
     AddFdInfo(1, 1024, false);
     AddFdInfo(2, 2048, true);  // Dmabuf 1
