@@ -74,13 +74,6 @@ static bool GetDmabufAttachmentStats(const std::string& attachment_dir_path,
     return true;
 }
 
-bool ReadBufferTotalMmapCount(unsigned int inode, unsigned int* mmap_count,
-                              const std::string& dmabuf_sysfs_path) {
-    std::string mmap_count_path =
-            ::android::base::StringPrintf("%s/%u/mmap_count", dmabuf_sysfs_path.c_str(), inode);
-    return ReadUintFromFile(mmap_count_path, mmap_count);
-}
-
 bool ReadBufferExporter(unsigned int inode, std::string* exporter,
                         const std::string& dmabuf_sysfs_path) {
     std::string exporter_path =

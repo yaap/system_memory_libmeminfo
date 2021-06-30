@@ -302,38 +302,5 @@ bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs
     return true;
 }
 
-bool ReadDmaBufPss(int pid, uint64_t* pss, const std::string& procfs_path,
-                   const std::string& dmabuf_sysfs_path) {
-    std::vector<DmaBuffer> dmabufs;
-
-    if (!ReadDmaBufMapRefs(pid, &dmabufs, procfs_path, dmabuf_sysfs_path)) {
-        LOG(ERROR) << "Failed to read mapped DMA buffers for pid " << pid;
-        return false;
-    }
-
-    *pss = 0;
-    for (const auto& buf : dmabufs) {
-        const auto& maprefs = buf.maprefs();
-        auto maprefs_it = maprefs.find(pid);
-        if (maprefs_it == maprefs.end()) {
-            LOG(ERROR) << "Failed to retrieve DMA buffer mmap count for pid " << pid;
-            return false;
-        }
-        int process_mmap_count = maprefs_it->second;
-
-        unsigned int total_mmap_count;
-        if (!ReadBufferTotalMmapCount(buf.inode(), &total_mmap_count, dmabuf_sysfs_path)) {
-            LOG(ERROR) << "Failed to read size DMA buffer total_mmap_count from sysfs";
-            return false;
-        }
-
-        if (total_mmap_count > 0) {
-            *pss += process_mmap_count / total_mmap_count * buf.size();
-        }
-    }
-
-    return true;
-}
-
 }  // namespace dmabufinfo
 }  // namespace android
