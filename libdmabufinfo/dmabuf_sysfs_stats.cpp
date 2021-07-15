@@ -45,35 +45,6 @@ static bool ReadUintFromFile(const std::string& path, unsigned int* val) {
     return true;
 }
 
-static bool GetDmabufAttachmentStats(const std::string& attachment_dir_path,
-                                     std::vector<DmabufAttachmentInfo>& info) {
-    std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(attachment_dir_path.c_str()), closedir);
-
-    if (!dir) {
-        PLOG(ERROR) << "Unable to access: " << attachment_dir_path;
-        return false;
-    }
-
-    struct dirent* dent;
-    while ((dent = readdir(dir.get()))) {
-        if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
-        std::string attachment_entry_path =
-                ::android::base::StringPrintf("%s/%s", attachment_dir_path.c_str(), dent->d_name);
-
-        std::string dev_path;
-        if (!android::base::Readlink(attachment_entry_path + "/device", &dev_path)) return false;
-
-        DmabufAttachmentInfo attachInfo = {};
-        attachInfo.device = android::base::Basename(dev_path);
-        if (!ReadUintFromFile(attachment_entry_path + "/map_counter", &attachInfo.map_count))
-            return false;
-
-        info.emplace_back(attachInfo);
-    }
-
-    return true;
-}
-
 bool ReadBufferExporter(unsigned int inode, std::string* exporter,
                         const std::string& dmabuf_sysfs_path) {
     std::string exporter_path =
@@ -92,8 +63,7 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysf
     // clear stats
     *stats = {};
 
-    // Iterate over all the buffer directories to save exporter name, size, mmap
-    // count and attachment information.
+    // Iterate over all the buffer directories to save exporter name, and size.
     struct dirent* dent;
     while ((dent = readdir(dir.get()))) {
         if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
@@ -127,10 +97,6 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysf
         stats->total_.size += info.size;
         stats->total_.buffer_count++;
 
-        // Read attachments on this buffer.
-        std::string attachment_dir = buf_entry_path + "/attachments";
-        if (!GetDmabufAttachmentStats(attachment_dir, info.attachments)) return false;
-
         stats->buffer_stats_.emplace_back(info);
 
         // update exporter_info_ map.
@@ -141,18 +107,6 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysf
         } else {
             struct DmabufTotal total = {.size = info.size, .buffer_count = 1};
             stats->exporter_info_[info.exp_name] = total;
-        }
-
-        // update importer_info_ map.
-        for (auto& attachment : info.attachments) {
-            auto imp_stats = stats->importer_info_.find(attachment.device);
-            if (imp_stats != stats->importer_info_.end()) {
-                imp_stats->second.size += info.size;
-                imp_stats->second.buffer_count++;
-            } else {
-                struct DmabufTotal total = {.size = info.size, .buffer_count = 1};
-                stats->importer_info_[attachment.device] = total;
-            }
         }
     }
 
