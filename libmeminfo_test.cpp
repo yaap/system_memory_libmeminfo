@@ -1009,10 +1009,8 @@ TEST_F(DmabufHeapStats, TestDmabufHeapTotalExportedKb) {
     ASSERT_TRUE(android::base::WriteStringToFile("test", system_heap_path));
 
     for (unsigned int inode_number = 74831; inode_number < 74841; inode_number++) {
-        auto attach_dir_path = StringPrintf("buffers/%u/attachments", inode_number);
-        ASSERT_TRUE(fs::create_directories(attach_dir_path));
-
         auto buffer_path = buffer_stats_path / StringPrintf("%u", inode_number);
+        ASSERT_TRUE(fs::create_directories(buffer_path));
 
         auto buffer_size_path = buffer_path / "size";
         const std::string buffer_size = "4096";
