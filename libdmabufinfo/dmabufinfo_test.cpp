@@ -244,13 +244,10 @@ class DmaBufSysfsStatsParser : public ::testing::Test {
 
 TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
     using android::base::StringPrintf;
-    const std::string device_name = "my_device";
 
     for (unsigned int inode_number = 74831; inode_number < 74841; inode_number++) {
-        auto attach_dir_path = StringPrintf("buffers/%u/attachments/2", inode_number);
-        ASSERT_TRUE(fs::create_directories(attach_dir_path));
-
         auto buffer_path = buffer_stats_path / StringPrintf("%u", inode_number);
+        ASSERT_TRUE(fs::create_directories(buffer_path));
 
         auto buffer_size_path = buffer_path / "size";
         const std::string buffer_size = "4096";
@@ -259,15 +256,6 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
         auto exp_name_path = buffer_path / "exporter_name";
         const std::string exp_name = "system";
         ASSERT_TRUE(android::base::WriteStringToFile(exp_name, exp_name_path));
-
-        auto attachment_dir = buffer_path / "attachments/2";
-
-        auto device_path = attachment_dir / "device";
-        fs::create_symlink(device_name, device_path);
-
-        auto map_count_path = attachment_dir / "map_counter";
-        const std::string map_count = "1";
-        ASSERT_TRUE(android::base::WriteStringToFile(map_count, map_count_path));
     }
 
     DmabufSysfsStats stats;
@@ -281,27 +269,12 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
     EXPECT_EQ(buf_info.exp_name, "system");
     EXPECT_EQ(buf_info.size, 4096UL);
 
-    auto attach_stats = buf_info.attachments;
-    ASSERT_EQ(attach_stats.size(), 1UL);
-    auto attach_info = attach_stats[0];
-    EXPECT_EQ(attach_info.map_count, 1UL);
-
-    EXPECT_EQ(attach_info.device, device_name);
-
     auto exporter_stats = stats.exporter_info();
     ASSERT_EQ(exporter_stats.size(), 1UL);
     auto exp_info = exporter_stats.find("system");
     ASSERT_TRUE(exp_info != exporter_stats.end());
     EXPECT_EQ(exp_info->second.size, 40960UL);
     EXPECT_EQ(exp_info->second.buffer_count, 10UL);
-
-    auto importer_stats = stats.importer_info();
-    ASSERT_EQ(importer_stats.size(), 1UL);
-    auto imp_info = importer_stats.find(device_name);
-    ASSERT_TRUE(imp_info != importer_stats.end());
-
-    EXPECT_EQ(imp_info->second.size, 40960UL);
-    EXPECT_EQ(imp_info->second.buffer_count, 10UL);
 
     auto total_size = stats.total_size();
     EXPECT_EQ(total_size, 40960UL);
