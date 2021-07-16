@@ -23,29 +23,16 @@ namespace android {
 namespace dmabufinfo {
 
 /*
- * struct DmabufAttachmentInfo: Information about an attachment on the DMA-BUF.
- *
- * @device: Name of the attaching device.
- * @map_count: The number of distinct mappings of the attachment.
- */
-struct DmabufAttachmentInfo {
-    std::string device;
-    unsigned int map_count;
-};
-
-/*
  * struct DmabufInfo: Represents information about a DMA-BUF.
  *
  * @inode: The unique inode number for the buffer.
  * @exp_name: Name of the exporter of the buffer.
  * @size: Size of the buffer.
- * @attachments: represents all attachments on the DMA-BUF.
  */
 struct DmabufInfo {
     unsigned int inode;
     std::string exp_name;
     unsigned int size;
-    std::vector<DmabufAttachmentInfo> attachments;
 };
 
 struct DmabufTotal {
@@ -59,9 +46,6 @@ class DmabufSysfsStats {
     inline const std::unordered_map<std::string, struct DmabufTotal>& exporter_info() const {
         return exporter_info_;
     }
-    inline const std::unordered_map<std::string, struct DmabufTotal>& importer_info() const {
-        return importer_info_;
-    }
     inline uint64_t total_size() const { return total_.size; }
     inline unsigned int total_count() const { return total_.buffer_count; }
 
@@ -70,13 +54,12 @@ class DmabufSysfsStats {
   private:
     std::vector<DmabufInfo> buffer_stats_;
     std::unordered_map<std::string, struct DmabufTotal> exporter_info_;
-    std::unordered_map<std::string, struct DmabufTotal> importer_info_;
     struct DmabufTotal total_;
 };
 
 /*
- * Reads and parses DMA-BUF statistics from sysfs to create per-buffer,
- * per-exporter and per-importer stats.
+ * Reads and parses DMA-BUF statistics from sysfs to create per-buffer
+ * and per-exporter stats.
  *
  * @stats: output argument that will be populated with information from DMA-BUF sysfs stats.
  * @path: Not for use by clients, to be used only for unit testing.
@@ -96,10 +79,6 @@ bool GetDmabufSysfsStats(DmabufSysfsStats* stats,
  */
 bool GetDmabufTotalExportedKb(uint64_t* total_exported,
                               const std::string& path = "/sys/kernel/dmabuf/buffers");
-
-/* Reads the total mmap count of the DMA buffer with @inode */
-bool ReadBufferTotalMmapCount(unsigned int inode, unsigned int* mmap_count,
-                              const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
 
 /* Reads the exporter name of the DMA buffer with @inode */
 bool ReadBufferExporter(unsigned int inode, std::string* exporter,
