@@ -373,6 +373,8 @@ bool ReadProcessGpuUsageKb([[maybe_unused]] uint32_t pid, [[maybe_unused]] uint3
 #if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
     static constexpr const char kBpfGpuMemTotalMap[] = "/sys/fs/bpf/map_gpu_mem_gpu_mem_total_map";
 
+    uint64_t gpu_mem;
+
     // BPF Key [32-bits GPU ID | 32-bits PID]
     uint64_t kBpfKeyGpuUsage = ((uint64_t)gpu_id << 32) | pid;
 
@@ -384,13 +386,18 @@ bool ReadProcessGpuUsageKb([[maybe_unused]] uint32_t pid, [[maybe_unused]] uint3
     }
 
     auto res = map.readValue(kBpfKeyGpuUsage);
-    if (!res.ok()) {
+
+    if (res.ok()) {
+        gpu_mem = res.value();
+    } else if (res.error().code() == ENOENT) {
+        gpu_mem = 0;
+    } else {
         LOG(ERROR) << "Invalid file format: " << kBpfGpuMemTotalMap;
         return false;
     }
 
     if (size) {
-        *size = res.value() / 1024;
+        *size = gpu_mem / 1024;
     }
     return true;
 #else
