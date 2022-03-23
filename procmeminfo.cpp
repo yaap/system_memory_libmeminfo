@@ -386,10 +386,6 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
     size_t num_in_page_cache = 0;
     size_t num_leftover_pages = num_pages;
     for (size_t cur_page = first_page; cur_page < first_page + num_pages; ++cur_page) {
-        if (!get_wss) {
-            vma.usage.vss += pagesz;
-        }
-
         // Cache page map data.
         if (cur_page_cache_index == num_in_page_cache) {
             static constexpr size_t kMaxPages = 2048;
@@ -481,6 +477,9 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
             vma.usage.shared_dirty += is_dirty ? pagesz : 0;
             vma.usage.shared_clean += is_dirty ? 0 : pagesz;
         }
+    }
+    if (!get_wss) {
+        vma.usage.vss += pagesz * num_pages;
     }
     return true;
 }
