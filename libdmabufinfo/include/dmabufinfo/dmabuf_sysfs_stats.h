@@ -30,7 +30,7 @@ namespace dmabufinfo {
  * @size: Size of the buffer.
  */
 struct DmabufInfo {
-    unsigned int inode;
+    unsigned long inode;
     std::string exp_name;
     unsigned int size;
 };
