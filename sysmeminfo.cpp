@@ -204,6 +204,61 @@ bool SysMemInfo::MemZramDevice(const char* zram_dev, uint64_t* mem_zram_dev) con
     return false;
 }
 
+uint64_t SysMemInfo::mem_compacted_kb(const char* zram_dev_cstr) {
+    uint64_t mem_compacted_total = 0;
+    if (zram_dev_cstr) {
+        // Fast-path, single device
+        if (!GetTotalMemCompacted(zram_dev_cstr, &mem_compacted_total)) {
+            return 0;
+        }
+        return mem_compacted_total / 1024;
+    }
+
+    // Slow path - multiple devices
+    constexpr uint32_t kMaxZramDevices = 256;
+    for (uint32_t i = 0; i < kMaxZramDevices; i++) {
+        std::string zram_dev_abspath = ::android::base::StringPrintf("/sys/block/zram%u/", i);
+        if (access(zram_dev_abspath.c_str(), F_OK)) {
+            // We assume zram devices appear in range 0-255 and appear always in sequence
+            // under /sys/block. So, stop looking for them once we find one is missing.
+            break;
+        }
+
+        uint64_t mem_compacted;
+        if (!GetTotalMemCompacted(zram_dev_abspath.c_str(), &mem_compacted)) {
+            return 0;
+        }
+
+        mem_compacted_total += mem_compacted;
+    }
+
+    return mem_compacted_total / 1024; // transform to KBs
+}
+
+// Returns the total memory compacted in bytes which corresponds to the following formula
+// compacted memory = uncompressed memory size - compressed memory size
+bool SysMemInfo::GetTotalMemCompacted(const char* zram_dev, uint64_t* out_mem_compacted) {
+    std::string mmstat = ::android::base::StringPrintf("%s/%s", zram_dev, "mm_stat");
+    auto mmstat_fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(mmstat.c_str(), "re"), fclose};
+    if (mmstat_fp != nullptr) {
+        uint64_t uncompressed_size_bytes;
+        uint64_t compressed_size_bytes;
+
+        if (fscanf(mmstat_fp.get(), "%" SCNu64 "%" SCNu64, &uncompressed_size_bytes,
+                   &compressed_size_bytes) != 2) {
+            PLOG(ERROR) << "Malformed mm_stat file in: " << zram_dev;
+            *out_mem_compacted = 0;
+            return false;
+        }
+
+        *out_mem_compacted = uncompressed_size_bytes - compressed_size_bytes;
+        return true;
+    }
+
+    *out_mem_compacted = 0;
+    return false;
+}
+
 // Public methods
 uint64_t ReadVmallocInfo(const char* path) {
     uint64_t vmalloc_total = 0;
