@@ -62,7 +62,7 @@ struct DmaBuffer {
     void SetName(const std::string& name) { name_ = name; }
     void SetExporter(const std::string& exporter) { exporter_ = exporter; }
     void SetCount(uint64_t count) { count_ = count; }
-    uint64_t Pss(pid_t pid) const { return maprefs_.count(pid) > 0 ? size_ / maprefs_.size() : 0; }
+    uint64_t Pss() const { return size_ / pids_.size(); }
 
     bool operator==(const DmaBuffer& rhs) {
         return (inode_ == rhs.inode()) && (size_ == rhs.size()) && (name_ == rhs.name()) &&
