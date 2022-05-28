@@ -161,12 +161,11 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
         printf("%22s %16s %16s %16s %16s\n", "Name", "Rss", "Pss", "nr_procs", "Inode");
         for (auto& inode : inodes) {
             DmaBuffer& buf = inode_to_dmabuf[inode];
-            uint64_t proc_pss = buf.Pss(pid);
             printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16zu %16" PRIuMAX "\n",
                    buf.name().empty() ? "<unknown>" : buf.name().c_str(), buf.size() / 1024,
-                   proc_pss / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()));
+                   buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()));
             rss += buf.size();
-            pss += proc_pss;
+            pss += buf.Pss();
         }
         printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16s\n", "PROCESS TOTAL", rss / 1024,
                pss / 1024, "");
