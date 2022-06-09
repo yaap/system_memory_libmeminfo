@@ -136,6 +136,31 @@ TEST(ProcMemInfo, MapsUsageFillInLater) {
     }
 }
 
+TEST(ProcMemInfo, MapsUsageFillInAll) {
+    ProcMemInfo proc_mem(pid);
+    const std::vector<Vma>& maps = proc_mem.MapsWithoutUsageStats();
+    EXPECT_FALSE(maps.empty());
+    for (auto& map : maps) {
+        ASSERT_EQ(0, map.usage.vss);
+        ASSERT_EQ(0, map.usage.rss);
+        ASSERT_EQ(0, map.usage.pss);
+        ASSERT_EQ(0, map.usage.uss);
+        ASSERT_EQ(0, map.usage.swap);
+        ASSERT_EQ(0, map.usage.swap_pss);
+        ASSERT_EQ(0, map.usage.private_clean);
+        ASSERT_EQ(0, map.usage.private_dirty);
+        ASSERT_EQ(0, map.usage.shared_clean);
+        ASSERT_EQ(0, map.usage.shared_dirty);
+    }
+    // GetUsageStats' non-default parameter get_wss is false by default in
+    // ProcMemInfo's constructor.
+    ASSERT_TRUE(proc_mem.GetUsageStats(false));
+    for (auto& map : maps) {
+        // Check that at least one usage stat was updated.
+        ASSERT_NE(0, map.usage.vss);
+    }
+}
+
 TEST(ProcMemInfo, PageMapPresent) {
     static constexpr size_t kNumPages = 20;
     size_t pagesize = getpagesize();

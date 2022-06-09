@@ -347,6 +347,10 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
         return true;
     }
 
+    return GetUsageStats(get_wss, use_pageidle, swap_only);
+}
+
+bool ProcMemInfo::GetUsageStats(bool get_wss, bool use_pageidle, bool swap_only) {
     ::android::base::unique_fd pagemap_fd(GetPagemapFd(pid_));
     if (pagemap_fd == -1) {
         return false;
