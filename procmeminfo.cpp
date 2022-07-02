@@ -225,6 +225,16 @@ bool ProcMemInfo::ForEachVma(const VmaCallback& callback, bool use_smaps) {
     return ForEachVmaFromFile(path, callback, use_smaps);
 }
 
+bool ProcMemInfo::ForEachExistingVma(const VmaCallback& callback) {
+    if (maps_.empty()) {
+        return false;
+    }
+    for (auto& vma : maps_) {
+        callback(vma);
+    }
+    return true;
+}
+
 bool ProcMemInfo::ForEachVmaFromMaps(const VmaCallback& callback) {
     Vma vma;
     auto vmaCollect = [&callback,&vma](const uint64_t start, uint64_t end, uint16_t flags,
