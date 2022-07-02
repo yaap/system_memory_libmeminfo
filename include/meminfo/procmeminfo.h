@@ -69,6 +69,12 @@ class ProcMemInfo final {
     // Returns false in case of failure during parsing.
     bool ForEachVmaFromMaps(const VmaCallback& callback);
 
+    // Takes the existing VMAs in 'maps_' and calls the callback() for each one
+    // of them. This is intended to avoid parsing /proc/<pid>/maps or
+    // /proc/<pid>/smaps twice.
+    // Returns false if 'maps_' is empty.
+    bool ForEachExistingVma(const VmaCallback& callback);
+
     // Used to parse either of /proc/<pid>/{smaps, smaps_rollup} and record the process's
     // Pss and Private memory usage in 'stats'.  In particular, the method only populates the fields
     // of the MemUsage structure that are intended to be used by Android's periodic Pss collection.

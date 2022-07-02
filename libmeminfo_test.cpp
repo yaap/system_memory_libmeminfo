@@ -339,6 +339,154 @@ TEST(ProcMemInfo, SmapsOrRollupPssSmapsTest) {
     EXPECT_EQ(pss, 19119);
 }
 
+TEST(ProcMemInfo, ForEachExistingVmaTest) {
+    std::string exec_dir = ::android::base::GetExecutableDirectory();
+    std::string path = ::android::base::StringPrintf("%s/testdata1/smaps_short", exec_dir.c_str());
+    ProcMemInfo proc_mem(pid);
+    // Populate maps_.
+    proc_mem.Smaps(path);
+    std::vector<Vma> vmas;
+    auto collect_vmas = [&](const Vma& v) { vmas.push_back(v); };
+    EXPECT_TRUE(proc_mem.ForEachExistingVma(collect_vmas));
+
+    // The size of vmas is not checked because Smaps() will return 5 vmas on x86
+    // and 6 vmas otherwise, as [vsyscall] is not processed on x86.
+
+    // Expect values to be equal to what we have in testdata1/smaps_short
+    // Check for names
+    EXPECT_EQ(vmas[0].name, "[anon:dalvik-zygote-jit-code-cache]");
+    EXPECT_EQ(vmas[1].name, "/system/framework/x86_64/boot-framework.art");
+    EXPECT_TRUE(vmas[2].name == "[anon:libc_malloc]" ||
+                android::base::StartsWith(vmas[2].name, "[anon:scudo:"))
+            << "Unknown map name " << vmas[2].name;
+    EXPECT_EQ(vmas[3].name, "/system/priv-app/SettingsProvider/oat/x86_64/SettingsProvider.odex");
+    EXPECT_EQ(vmas[4].name, "/system/lib64/libhwui.so");
+
+    // Check start address
+    EXPECT_EQ(vmas[0].start, 0x54c00000);
+    EXPECT_EQ(vmas[1].start, 0x701ea000);
+    EXPECT_EQ(vmas[2].start, 0x70074dd8d000);
+    EXPECT_EQ(vmas[3].start, 0x700755a2d000);
+    EXPECT_EQ(vmas[4].start, 0x7007f85b0000);
+
+    // Check end address
+    EXPECT_EQ(vmas[0].end, 0x56c00000);
+    EXPECT_EQ(vmas[1].end, 0x70cdb000);
+    EXPECT_EQ(vmas[2].end, 0x70074ee0d000);
+    EXPECT_EQ(vmas[3].end, 0x700755a6e000);
+    EXPECT_EQ(vmas[4].end, 0x7007f8b9b000);
+
+    // Check Flags
+    EXPECT_EQ(vmas[0].flags, PROT_READ | PROT_EXEC);
+    EXPECT_EQ(vmas[1].flags, PROT_READ | PROT_WRITE);
+    EXPECT_EQ(vmas[2].flags, PROT_READ | PROT_WRITE);
+    EXPECT_EQ(vmas[3].flags, PROT_READ | PROT_EXEC);
+    EXPECT_EQ(vmas[4].flags, PROT_READ | PROT_EXEC);
+
+    // Check Shared
+    EXPECT_FALSE(vmas[0].is_shared);
+    EXPECT_FALSE(vmas[1].is_shared);
+    EXPECT_FALSE(vmas[2].is_shared);
+    EXPECT_FALSE(vmas[3].is_shared);
+    EXPECT_FALSE(vmas[4].is_shared);
+
+    // Check Offset
+    EXPECT_EQ(vmas[0].offset, 0x0);
+    EXPECT_EQ(vmas[1].offset, 0x0);
+    EXPECT_EQ(vmas[2].offset, 0x0);
+    EXPECT_EQ(vmas[3].offset, 0x00016000);
+    EXPECT_EQ(vmas[4].offset, 0x001ee000);
+
+    // Check Inode
+    EXPECT_EQ(vmas[0].inode, 0);
+    EXPECT_EQ(vmas[1].inode, 3165);
+    EXPECT_EQ(vmas[2].inode, 0);
+    EXPECT_EQ(vmas[3].inode, 1947);
+    EXPECT_EQ(vmas[4].inode, 1537);
+
+    // Check smaps specific fields
+    ASSERT_EQ(vmas[0].usage.vss, 32768);
+    EXPECT_EQ(vmas[1].usage.vss, 11204);
+    EXPECT_EQ(vmas[2].usage.vss, 16896);
+    EXPECT_EQ(vmas[3].usage.vss, 260);
+    EXPECT_EQ(vmas[4].usage.vss, 6060);
+
+    EXPECT_EQ(vmas[0].usage.rss, 2048);
+    EXPECT_EQ(vmas[1].usage.rss, 11188);
+    EXPECT_EQ(vmas[2].usage.rss, 15272);
+    EXPECT_EQ(vmas[3].usage.rss, 260);
+    EXPECT_EQ(vmas[4].usage.rss, 4132);
+
+    EXPECT_EQ(vmas[0].usage.pss, 113);
+    EXPECT_EQ(vmas[1].usage.pss, 2200);
+    EXPECT_EQ(vmas[2].usage.pss, 15272);
+    EXPECT_EQ(vmas[3].usage.pss, 260);
+    EXPECT_EQ(vmas[4].usage.pss, 1274);
+
+    EXPECT_EQ(vmas[0].usage.uss, 0);
+    EXPECT_EQ(vmas[1].usage.uss, 1660);
+    EXPECT_EQ(vmas[2].usage.uss, 15272);
+    EXPECT_EQ(vmas[3].usage.uss, 260);
+    EXPECT_EQ(vmas[4].usage.uss, 0);
+
+    EXPECT_EQ(vmas[0].usage.private_clean, 0);
+    EXPECT_EQ(vmas[1].usage.private_clean, 0);
+    EXPECT_EQ(vmas[2].usage.private_clean, 0);
+    EXPECT_EQ(vmas[3].usage.private_clean, 260);
+    EXPECT_EQ(vmas[4].usage.private_clean, 0);
+
+    EXPECT_EQ(vmas[0].usage.private_dirty, 0);
+    EXPECT_EQ(vmas[1].usage.private_dirty, 1660);
+    EXPECT_EQ(vmas[2].usage.private_dirty, 15272);
+    EXPECT_EQ(vmas[3].usage.private_dirty, 0);
+    EXPECT_EQ(vmas[4].usage.private_dirty, 0);
+
+    EXPECT_EQ(vmas[0].usage.shared_clean, 0);
+    EXPECT_EQ(vmas[1].usage.shared_clean, 80);
+    EXPECT_EQ(vmas[2].usage.shared_clean, 0);
+    EXPECT_EQ(vmas[3].usage.shared_clean, 0);
+    EXPECT_EQ(vmas[4].usage.shared_clean, 4132);
+
+    EXPECT_EQ(vmas[0].usage.shared_dirty, 2048);
+    EXPECT_EQ(vmas[1].usage.shared_dirty, 9448);
+    EXPECT_EQ(vmas[2].usage.shared_dirty, 0);
+    EXPECT_EQ(vmas[3].usage.shared_dirty, 0);
+    EXPECT_EQ(vmas[4].usage.shared_dirty, 0);
+
+    EXPECT_EQ(vmas[0].usage.swap, 0);
+    EXPECT_EQ(vmas[1].usage.swap, 0);
+    EXPECT_EQ(vmas[2].usage.swap, 0);
+    EXPECT_EQ(vmas[3].usage.swap, 0);
+    EXPECT_EQ(vmas[4].usage.swap, 0);
+
+    EXPECT_EQ(vmas[0].usage.swap_pss, 0);
+    EXPECT_EQ(vmas[1].usage.swap_pss, 0);
+    EXPECT_EQ(vmas[2].usage.swap_pss, 0);
+    EXPECT_EQ(vmas[3].usage.swap_pss, 0);
+    EXPECT_EQ(vmas[4].usage.swap_pss, 0);
+
+#ifndef __x86_64__
+    // vmas[5] will not exist on x86, as [vsyscall] would not be processed.
+    EXPECT_EQ(vmas[5].name, "[vsyscall]");
+    EXPECT_EQ(vmas[5].start, 0xffffffffff600000);
+    EXPECT_EQ(vmas[5].end, 0xffffffffff601000);
+    EXPECT_EQ(vmas[5].flags, PROT_READ | PROT_EXEC);
+    EXPECT_FALSE(vmas[5].is_shared);
+    EXPECT_EQ(vmas[5].offset, 0x0);
+    EXPECT_EQ(vmas[5].inode, 0);
+    EXPECT_EQ(vmas[5].usage.vss, 4);
+    EXPECT_EQ(vmas[5].usage.rss, 0);
+    EXPECT_EQ(vmas[5].usage.pss, 0);
+    EXPECT_EQ(vmas[5].usage.uss, 0);
+    EXPECT_EQ(vmas[5].usage.private_clean, 0);
+    EXPECT_EQ(vmas[5].usage.private_dirty, 0);
+    EXPECT_EQ(vmas[5].usage.shared_clean, 0);
+    EXPECT_EQ(vmas[5].usage.shared_dirty, 0);
+    EXPECT_EQ(vmas[5].usage.swap, 0);
+    EXPECT_EQ(vmas[5].usage.swap_pss, 0);
+#endif
+}
+
 TEST(ProcMemInfo, ForEachVmaFromFile_SmapsTest) {
     // Parse smaps file correctly to make callbacks for each virtual memory area (vma)
     std::string exec_dir = ::android::base::GetExecutableDirectory();
