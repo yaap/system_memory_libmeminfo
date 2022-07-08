@@ -347,7 +347,11 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
         return true;
     }
 
-    return GetUsageStats(get_wss, use_pageidle, swap_only);
+    if (!GetUsageStats(get_wss, use_pageidle, swap_only)) {
+        maps_.clear();
+        return false;
+    }
+    return true;
 }
 
 bool ProcMemInfo::GetUsageStats(bool get_wss, bool use_pageidle, bool swap_only) {
@@ -360,7 +364,6 @@ bool ProcMemInfo::GetUsageStats(bool get_wss, bool use_pageidle, bool swap_only)
         if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss, use_pageidle, swap_only)) {
             LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start << "-"
                        << vma.end << "]";
-            maps_.clear();
             return false;
         }
         add_mem_usage(&usage_, vma.usage);
