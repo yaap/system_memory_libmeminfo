@@ -52,9 +52,8 @@ class ProcMemInfo final {
     // usage stats for this single vma.
     bool FillInVmaStats(Vma& vma);
 
-    // If Smaps, ReadMaps (with get_usage_stats == false), or
-    // MapsWithoutUsageStats was called, this function will fill in usage stats
-    // for all vmas in 'maps_'.
+    // If ReadMaps (with get_usage_stats == false) or MapsWithoutUsageStats was
+    // called, this function will fill in usage stats for all vmas in 'maps_'.
     bool GetUsageStats(bool get_wss, bool use_pageidle = false, bool swap_only = false);
 
     // Collect all 'vma' or 'maps' from /proc/<pid>/smaps and store them in 'maps_'. Returns a
