@@ -56,11 +56,12 @@ class ProcMemInfo final {
     // called, this function will fill in usage stats for all vmas in 'maps_'.
     bool GetUsageStats(bool get_wss, bool use_pageidle = false, bool swap_only = false);
 
-    // Collect all 'vma' or 'maps' from /proc/<pid>/smaps and store them in 'maps_'. Returns a
-    // constant reference to the vma vector after the collection is done.
+    // Collect all 'vma' or 'maps' from /proc/<pid>/smaps and store them in 'maps_'. If
+    // 'collect_usage' is 'true', this method will populate 'usage_' as vmas are being
+    // collected. Returns a constant reference to the vma vector after the collection is done.
     //
     // Each 'struct Vma' is *fully* populated by this method (unlike SmapsOrRollup).
-    const std::vector<Vma>& Smaps(const std::string& path = "");
+    const std::vector<Vma>& Smaps(const std::string& path = "", bool collect_usage = false);
 
     // If 'use_smaps' is 'true' this method reads /proc/<pid>/smaps and calls the callback()
     // for each vma or map that it finds, else if 'use_smaps' is false /proc/<pid>/maps is
