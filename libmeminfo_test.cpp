@@ -856,6 +856,30 @@ TEST(ProcMemInfo, SmapsTest) {
 #endif
 }
 
+TEST(ProcMemInfo, SmapsPopulatesUsageTest) {
+    std::string exec_dir = ::android::base::GetExecutableDirectory();
+    std::string path = ::android::base::StringPrintf("%s/testdata1/smaps_short", exec_dir.c_str());
+    ProcMemInfo proc_mem(pid);
+    auto vmas = proc_mem.Smaps(path, true);
+
+    // Expect values to be equal to sums of usage in testdata1/smaps_short. For
+    // this data, only vss differs on x86.
+#ifndef __x86_64__
+    EXPECT_EQ(proc_mem.Usage().vss, 67192);
+#else
+    EXPECT_EQ(proc_mem.Usage().vss, 67188);
+#endif
+    EXPECT_EQ(proc_mem.Usage().rss, 32900);
+    EXPECT_EQ(proc_mem.Usage().pss, 19119);
+    EXPECT_EQ(proc_mem.Usage().uss, 17192);
+    EXPECT_EQ(proc_mem.Usage().private_clean, 260);
+    EXPECT_EQ(proc_mem.Usage().private_dirty, 16932);
+    EXPECT_EQ(proc_mem.Usage().shared_clean, 4212);
+    EXPECT_EQ(proc_mem.Usage().shared_dirty, 11496);
+    EXPECT_EQ(proc_mem.Usage().swap, 0);
+    EXPECT_EQ(proc_mem.Usage().swap_pss, 0);
+}
+
 TEST(SysMemInfo, TestSysMemInfoFile) {
     std::string meminfo = R"meminfo(MemTotal:        3019740 kB
 MemFree:         1809728 kB

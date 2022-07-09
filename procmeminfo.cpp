@@ -167,7 +167,7 @@ const std::vector<Vma>& ProcMemInfo::MapsWithoutUsageStats() {
     return maps_;
 }
 
-const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path) {
+const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect_usage) {
     if (!maps_.empty()) {
         return maps_;
     }
@@ -176,6 +176,9 @@ const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path) {
         if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), vma.name) ==
                 g_excluded_vmas.end()) {
             maps_.emplace_back(vma);
+            if (collect_usage) {
+                add_mem_usage(&usage_, vma.usage);
+            }
         }
     };
     if (path.empty() && !ForEachVma(collect_vmas)) {
