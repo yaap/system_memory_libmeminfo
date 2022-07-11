@@ -440,7 +440,7 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufMapRefs) {
     AddMapEntries(map_entries);
 
     AddSysfsDmaBufStats(2, 1024, 2);  // Dmabuf 1
-    AddSysfsDmaBufStats(3, 1024, 1);  // Dmabuf 2
+    AddSysfsDmaBufStats(3, 2048, 1);  // Dmabuf 2
 
     std::vector<DmaBuffer> dmabufs;
     ASSERT_TRUE(ReadDmaBufMapRefs(pid, &dmabufs, procfs_path, dmabuf_sysfs_path));
