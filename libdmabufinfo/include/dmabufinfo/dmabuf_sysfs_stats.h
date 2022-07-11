@@ -84,5 +84,9 @@ bool GetDmabufTotalExportedKb(uint64_t* total_exported,
 bool ReadBufferExporter(unsigned int inode, std::string* exporter,
                         const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
 
+/* Reads the size of the DMA buffer with @inode */
+bool ReadBufferSize(unsigned int inode, unsigned int* size,
+                    const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+
 }  // namespace dmabufinfo
 }  // namespace android

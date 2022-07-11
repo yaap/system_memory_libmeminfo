@@ -231,11 +231,22 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
         // We have a new buffer, but unknown count and name and exporter name
         // Try to lookup exporter name in sysfs
         std::string exporter;
-        if (!ReadBufferExporter(mapinfo.inode, &exporter, dmabuf_sysfs_path)) {
+        bool sysfs_stats = ReadBufferExporter(mapinfo.inode, &exporter, dmabuf_sysfs_path);
+        if (!sysfs_stats) {
             exporter = "<unknown>";
         }
-        DmaBuffer& dbuf = dmabufs->emplace_back(mapinfo.inode, mapinfo.end - mapinfo.start, 0,
-                                                exporter, "<unknown>");
+
+        // Using the VMA range as the size of the buffer can be misleading,
+        // due to partially mapped buffers or VMAs that extend beyond the
+        // buffer size.
+        //
+        // Attempt to retrieve the real buffer size from sysfs.
+        unsigned int size = 0;
+        if (!sysfs_stats || !ReadBufferSize(mapinfo.inode, &size, dmabuf_sysfs_path)) {
+            size = mapinfo.end - mapinfo.start;
+        }
+
+        DmaBuffer& dbuf = dmabufs->emplace_back(mapinfo.inode, size, 0, exporter, "<unknown>");
         dbuf.AddMapRef(pid);
     };
 

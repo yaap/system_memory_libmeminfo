@@ -52,6 +52,12 @@ bool ReadBufferExporter(unsigned int inode, std::string* exporter,
     return android::base::ReadFileToString(exporter_path, exporter);
 }
 
+bool ReadBufferSize(unsigned int inode, unsigned int* size, const std::string& dmabuf_sysfs_path) {
+    std::string size_path =
+            ::android::base::StringPrintf("%s/%u/size", dmabuf_sysfs_path.c_str(), inode);
+    return ReadUintFromFile(size_path, size);
+}
+
 bool GetDmabufSysfsStats(DmabufSysfsStats* stats, const std::string& dmabuf_sysfs_stats_path) {
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dmabuf_sysfs_stats_path.c_str()), closedir);
 
