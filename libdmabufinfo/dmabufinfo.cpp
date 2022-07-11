@@ -241,7 +241,7 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
         // buffer size.
         //
         // Attempt to retrieve the real buffer size from sysfs.
-        unsigned int size = 0;
+        uint64_t size = 0;
         if (!sysfs_stats || !ReadBufferSize(mapinfo.inode, &size, dmabuf_sysfs_path)) {
             size = mapinfo.end - mapinfo.start;
         }
