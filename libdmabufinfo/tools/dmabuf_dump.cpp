@@ -192,7 +192,7 @@ static void DumpDmabufSysfsStats() {
     printf("\n\n----------------------- DMA-BUF per-buffer stats -----------------------\n");
     printf("    Dmabuf Inode |     Size(bytes) |             Exporter Name             |\n");
     for (const auto& buf : buffer_stats) {
-        printf("%16lu |%16u | %16s \n", buf.inode, buf.size, buf.exp_name.c_str());
+        printf("%16lu |%" PRIu64 " | %16s \n", buf.inode, buf.size, buf.exp_name.c_str());
     }
 
     printf("\n\n----------------------- DMA-BUF exporter stats -----------------------\n");
