@@ -32,7 +32,7 @@ namespace dmabufinfo {
 struct DmabufInfo {
     unsigned long inode;
     std::string exp_name;
-    unsigned int size;
+    uint64_t size;
 };
 
 struct DmabufTotal {
@@ -83,6 +83,10 @@ bool GetDmabufTotalExportedKb(uint64_t* total_exported,
 /* Reads the exporter name of the DMA buffer with @inode */
 bool ReadBufferExporter(unsigned int inode, std::string* exporter,
                         const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+
+/* Reads the size of the DMA buffer with @inode */
+bool ReadBufferSize(unsigned int inode, uint64_t* size,
+                    const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
 
 }  // namespace dmabufinfo
 }  // namespace android
