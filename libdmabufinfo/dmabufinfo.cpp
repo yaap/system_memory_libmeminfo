@@ -209,9 +209,6 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
         return false;
     }
 
-    char* line = nullptr;
-    size_t len = 0;
-
     // Process the map if it is dmabuf. Add map reference to existing object in 'dmabufs'
     // if it was already found. If it wasn't create a new one and append it to 'dmabufs'
     auto account_dmabuf = [&](const android::procinfo::MapInfo& mapinfo) {
@@ -250,9 +247,12 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
         dbuf.AddMapRef(pid);
     };
 
+    char* line = nullptr;
+    size_t len = 0;
     while (getline(&line, &len, fp.get()) > 0) {
         if (!::android::procinfo::ReadMapFileContent(line, account_dmabuf)) {
             LOG(ERROR) << "Failed to parse maps for pid: " << pid;
+            free(line);
             return false;
         }
     }
