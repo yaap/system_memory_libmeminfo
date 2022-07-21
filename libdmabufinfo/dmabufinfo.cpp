@@ -282,10 +282,11 @@ bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs, const std::string& path) {
         char* name = nullptr;
         int matched = sscanf(line, "%" SCNu64 "%*x %*x %" SCNu64 " %ms %" SCNu64 " %ms", &size,
                              &count, &exporter_name, &inode, &name);
-        if (matched < 4) {
-            continue;
+        if (matched >= 4) {
+            dmabufs->emplace_back((ino_t)inode, size, count, exporter_name,
+                                  matched > 4 ? name : "");
         }
-        dmabufs->emplace_back((ino_t)inode, size, count, exporter_name, matched > 4 ? name : "");
+
         free(exporter_name);
         free(name);
     }
