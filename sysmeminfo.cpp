@@ -322,7 +322,7 @@ bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_r
 
 bool ReadPerProcessGpuMem([[maybe_unused]] std::unordered_map<uint32_t, uint64_t>* out) {
 #if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
-    static constexpr const char kBpfGpuMemTotalMap[] = "/sys/fs/bpf/map_gpu_mem_gpu_mem_total_map";
+    static constexpr const char kBpfGpuMemTotalMap[] = "/sys/fs/bpf/map_gpuMem_gpu_mem_total_map";
 
     // Use the read-only wrapper BpfMapRO to properly retrieve the read-only map.
     auto map = bpf::BpfMapRO<uint64_t, uint64_t>(kBpfGpuMemTotalMap);
@@ -371,7 +371,7 @@ bool ReadPerProcessGpuMem([[maybe_unused]] std::unordered_map<uint32_t, uint64_t
 bool ReadProcessGpuUsageKb([[maybe_unused]] uint32_t pid, [[maybe_unused]] uint32_t gpu_id,
                            uint64_t* size) {
 #if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
-    static constexpr const char kBpfGpuMemTotalMap[] = "/sys/fs/bpf/map_gpu_mem_gpu_mem_total_map";
+    static constexpr const char kBpfGpuMemTotalMap[] = "/sys/fs/bpf/map_gpuMem_gpu_mem_total_map";
 
     uint64_t gpu_mem;
 
