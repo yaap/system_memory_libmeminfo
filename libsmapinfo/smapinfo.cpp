@@ -214,7 +214,7 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_procrank_s
 
 static bool populate_procrank_procs(struct procrank_params* params, uint64_t pgflags,
                                     uint64_t pgflags_mask, std::vector<uint16_t> swap_offset_array,
-                                    std::set<pid_t> pids, std::vector<ProcessRecord>* procs,
+                                    const std::set<pid_t>& pids, std::vector<ProcessRecord>* procs,
                                     std::stringstream& err) {
     // Mark each swap offset used by the process as we find them for calculating
     // proportional swap usage later.
@@ -385,7 +385,7 @@ static void print_procrank_sysmeminfo(struct procrank_params* params,
                         smi.mem_cached_kb(), smi.mem_shmem_kb(), smi.mem_slab_kb());
 }
 
-bool procrank(uint64_t pgflags, uint64_t pgflags_mask, std::set<pid_t> pids, bool get_oomadj,
+bool procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids, bool get_oomadj,
               bool get_wss, int sort_order, bool reverse_sort, std::stringstream& out,
               std::stringstream& err) {
     ::android::meminfo::SysMemInfo smi;
