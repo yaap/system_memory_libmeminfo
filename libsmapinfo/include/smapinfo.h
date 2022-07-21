@@ -28,7 +28,7 @@ bool get_all_pids(std::set<pid_t>* pids);
 // a) system memory information could not be read,
 // b) swap offsets could not be counted for some process,
 // c) reset_wss is true but the working set for some process could not be reset.
-bool procrank(uint64_t pgflags, uint64_t pgflags_mask, std::set<pid_t> pids, bool get_oomadj,
+bool procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids, bool get_oomadj,
               bool get_wss, int sort_order, bool reverse_sort, std::stringstream& out,
               std::stringstream& err);
 
