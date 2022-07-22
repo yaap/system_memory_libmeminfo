@@ -183,28 +183,28 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_procrank_s
             proc_sort = [&](ProcessRecord& a, ProcessRecord& b) { return a.oomadj() > b.oomadj(); };
             break;
         case (BY_RSS):
-            proc_sort = [&](ProcessRecord& a, ProcessRecord& b) {
+            proc_sort = [=](ProcessRecord& a, ProcessRecord& b) {
                 return a.Usage(params->show_wss).rss > b.Usage(params->show_wss).rss;
             };
             break;
         case (BY_SWAP):
-            proc_sort = [&](ProcessRecord& a, ProcessRecord& b) {
+            proc_sort = [=](ProcessRecord& a, ProcessRecord& b) {
                 return a.Usage(params->show_wss).swap > b.Usage(params->show_wss).swap;
             };
             break;
         case (BY_USS):
-            proc_sort = [&](ProcessRecord& a, ProcessRecord& b) {
+            proc_sort = [=](ProcessRecord& a, ProcessRecord& b) {
                 return a.Usage(params->show_wss).uss > b.Usage(params->show_wss).uss;
             };
             break;
         case (BY_VSS):
-            proc_sort = [&](ProcessRecord& a, ProcessRecord& b) {
+            proc_sort = [=](ProcessRecord& a, ProcessRecord& b) {
                 return a.Usage(params->show_wss).vss > b.Usage(params->show_wss).vss;
             };
             break;
         case (BY_PSS):
         default:
-            proc_sort = [&](ProcessRecord& a, ProcessRecord& b) {
+            proc_sort = [=](ProcessRecord& a, ProcessRecord& b) {
                 return a.Usage(params->show_wss).pss > b.Usage(params->show_wss).pss;
             };
             break;
