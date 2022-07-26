@@ -39,16 +39,13 @@
 
 #include <meminfo/procmeminfo.h>
 
+using ::android::meminfo::EscapeCsvString;
+using ::android::meminfo::EscapeJsonString;
+using ::android::meminfo::Format;
+using ::android::meminfo::GetFormat;
 using ::android::meminfo::MemUsage;
 using ::android::meminfo::ProcMemInfo;
 using ::android::meminfo::Vma;
-
-// The output format that can be specifid by user.
-enum Format {
-    RAW = 0,
-    JSON,
-    CSV
-};
 
 [[noreturn]] static void usage(int exit_status) {
     std::cerr << "Usage: " << getprogname() << " [ -P | -L ] [ -v | -r | -p | -u | -s | -h ]\n"
@@ -239,27 +236,12 @@ static uint16_t parse_mapflags(const char* mapflags) {
     return ret;
 }
 
-static std::string escape_csv_string(const std::string& raw) {
-  std::string ret;
-  for (auto it = raw.cbegin(); it != raw.cend(); it++) {
-    switch (*it) {
-      case '"':
-        ret += "\"\"";
-        break;
-      default:
-        ret += *it;
-        break;
-    }
-  }
-  return '"' + ret + '"';
-}
-
 void to_csv(LibRecord& l, ProcessRecord& p, std::ostream& output) {
     const MemUsage& usage = p.usage();
     // clang-format off
-    output << escape_csv_string(l.name())
+    output << EscapeCsvString(l.name())
            << "," << l.pss() / 1024
-           << "," << escape_csv_string(p.cmdline())
+           << "," << EscapeCsvString(p.cmdline())
            << ",\"[" << p.pid() << "]\""
            << "," << usage.vss / 1024
            << "," << usage.rss / 1024
@@ -272,48 +254,12 @@ void to_csv(LibRecord& l, ProcessRecord& p, std::ostream& output) {
     output << "\n";
 }
 
-static std::string escape_json_string(const std::string& raw) {
-  std::string ret;
-  for (auto it = raw.cbegin(); it != raw.cend(); it++) {
-    switch (*it) {
-      case '\\':
-        ret += "\\\\";
-        break;
-      case '"':
-        ret += "\\\"";
-        break;
-      case '/':
-        ret += "\\/";
-        break;
-      case '\b':
-        ret += "\\b";
-        break;
-      case '\f':
-        ret += "\\f";
-        break;
-      case '\n':
-        ret += "\\n";
-        break;
-      case '\r':
-        ret += "\\r";
-        break;
-      case '\t':
-        ret += "\\t";
-        break;
-      default:
-        ret += *it;
-        break;
-    }
-  }
-  return '"' + ret + '"';
-}
-
 void to_json(LibRecord& l, ProcessRecord& p, std::ostream& output) {
     const MemUsage& usage = p.usage();
     // clang-format off
-    output << "{\"Library\":" << escape_json_string(l.name())
+    output << "{\"Library\":" << EscapeJsonString(l.name())
            << ",\"Total_RSS\":" << l.pss() / 1024
-           << ",\"Process\":" << escape_json_string(p.cmdline())
+           << ",\"Process\":" << EscapeJsonString(p.cmdline())
            << ",\"PID\":\"" << p.pid() << "\""
            << ",\"VSS\":" << usage.vss / 1024
            << ",\"RSS\":" << usage.rss / 1024
@@ -324,20 +270,6 @@ void to_json(LibRecord& l, ProcessRecord& p, std::ostream& output) {
         output << ",\"Swap\":" << usage.swap / 1024;
     }
     output << "}\n";
-}
-
-static Format get_format(std::string arg) {
-    if (arg.compare("json") == 0) {
-        return JSON;
-    }
-    if (arg.compare("csv") == 0) {
-        return CSV;
-    }
-    if (arg.compare("raw") == 0) {
-        return RAW;
-    }
-    error(EXIT_FAILURE, 0, "Invalid format.");
-    return RAW;
 }
 
 int main(int argc, char* argv[]) {
@@ -365,7 +297,7 @@ int main(int argc, char* argv[]) {
 
     std::function<bool(const ProcessRecord&, const ProcessRecord&)> sort_func = pss_sort;
 
-    Format format = RAW;
+    Format format = Format::RAW;
     while ((opt = getopt(argc, argv, "acCf:hkm:pP:uvrsR")) != -1) {
         switch (opt) {
             case 'a':
@@ -379,7 +311,11 @@ int main(int argc, char* argv[]) {
                 g_pgflags = g_pgflags_mask = (1 << KPF_SWAPBACKED);
                 break;
             case 'f':
-                format = get_format(optarg);
+                format = GetFormat(optarg);
+                if (format == Format::INVALID) {
+                    std::cerr << "Invalid format." << std::endl;
+                    usage(EXIT_FAILURE);
+                }
                 break;
             case 'h':
                 usage(EXIT_SUCCESS);
@@ -420,7 +356,7 @@ int main(int argc, char* argv[]) {
     }
 
     switch (format) {
-        case RAW:
+        case Format::RAW:
             // clang-format off
             std::cout << std::setw(7) << "RSStot"
                       << std::setw(10) << "VSS"
@@ -435,7 +371,7 @@ int main(int argc, char* argv[]) {
             }
             std::cout << "Name/PID\n";
             break;
-        case CSV:
+        case Format::CSV:
             std::cout << "\"Library\",\"Total_RSS\",\"Process\",\"PID\",\"VSS\",\"RSS\",\"PSS\","
                          "\"USS\"";
             if (g_has_swap) {
@@ -443,7 +379,9 @@ int main(int argc, char* argv[]) {
             }
             std::cout << "\n";
             break;
-        case JSON:
+        case Format::JSON:
+            break;
+        default:
             break;
     }
 
@@ -457,7 +395,7 @@ int main(int argc, char* argv[]) {
               [](const LibRecord& l1, const LibRecord& l2) { return l1.pss() > l2.pss(); });
 
     for (auto& lib : v_libs) {
-        if (format == RAW) {
+        if (format == Format::RAW) {
             // clang-format off
             std::cout << std::setw(6) << lib.pss() / 1024 << "K"
                       << std::setw(10) << ""
@@ -485,7 +423,7 @@ int main(int argc, char* argv[]) {
         for (auto& p : procs) {
             const MemUsage& usage = p.usage();
             switch (format) {
-                case RAW:
+                case Format::RAW:
                     // clang-format off
                     std::cout << std::setw(7) << ""
                               << std::setw(9) << usage.vss / 1024 << "K  "
@@ -498,11 +436,13 @@ int main(int argc, char* argv[]) {
                     }
                     std::cout << "  " << p.cmdline() << " [" << p.pid() << "]\n";
                     break;
-                case JSON:
+                case Format::JSON:
                     to_json(lib, p, std::cout);
                     break;
-                case CSV:
+                case Format::CSV:
                     to_csv(lib, p, std::cout);
+                    break;
+                default:
                     break;
             }
         }
