@@ -214,7 +214,7 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_procrank_s
 }
 
 static bool populate_procrank_procs(struct procrank_params* params, uint64_t pgflags,
-                                    uint64_t pgflags_mask, std::vector<uint16_t> swap_offset_array,
+                                    uint64_t pgflags_mask, std::vector<uint16_t>& swap_offset_array,
                                     const std::set<pid_t>& pids, std::vector<ProcessRecord>* procs,
                                     std::stringstream& err) {
     // Mark each swap offset used by the process as we find them for calculating
