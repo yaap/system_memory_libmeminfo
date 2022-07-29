@@ -45,7 +45,7 @@ enum SortOrder { BY_PSS = 0, BY_RSS, BY_USS, BY_VSS, BY_SWAP, BY_OOMADJ };
 struct ProcessRecord {
   public:
     ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t pgflags_mask,
-                  std::stringstream& err)
+                  bool get_cmdline, bool get_oomadj, std::stringstream& err)
         : pid_(-1),
           cmdline_(""),
           oomadj_(OOM_SCORE_ADJ_MAX + 1),
@@ -59,30 +59,35 @@ struct ProcessRecord {
             return;
         }
 
-        std::string fname = ::android::base::StringPrintf("/proc/%d/oom_score_adj", pid);
-        auto oomscore_fp =
-                std::unique_ptr<FILE, decltype(&fclose)>{fopen(fname.c_str(), "re"), fclose};
-        if (oomscore_fp == nullptr) {
-            err << "Failed to open oom_score_adj file: " << fname << std::endl;
-            return;
+        // cmdline_ only needs to be populated if this record will be used by procrank/librank.
+        if (get_cmdline) {
+            std::string fname = StringPrintf("/proc/%d/cmdline", pid);
+            if (!::android::base::ReadFileToString(fname, &cmdline_)) {
+                std::cerr << "Failed to read cmdline from: " << fname << std::endl;
+                cmdline_ = "<unknown>";
+            }
+            // We deliberately don't read the /proc/<pid>/cmdline file directly into 'cmdline_'
+            // because some processes have cmdlines that end with "0x00 0x0A 0x00",
+            // e.g. xtra-daemon, lowi-server.
+            // The .c_str() assignment takes care of trimming the cmdline at the first 0x00. This is
+            // how the original procrank worked (luckily).
+            cmdline_.resize(strlen(cmdline_.c_str()));
         }
 
-        if (fscanf(oomscore_fp.get(), "%d\n", &oomadj_) != 1) {
-            err << "Failed to read oomadj from: " << fname << std::endl;
-            return;
+        // oomadj_ only needs to be populated if this record will be used by procrank.
+        if (get_oomadj) {
+            std::string fname = StringPrintf("/proc/%d/oom_score_adj", pid);
+            std::string oom_score;
+            if (!::android::base::ReadFileToString(fname, &oom_score)) {
+                std::cerr << "Failed to read oom_score_adj file: " << fname << std::endl;
+                return;
+            }
+            if (!::android::base::ParseInt(::android::base::Trim(oom_score), &oomadj_)) {
+                std::cerr << "Failed to parse oomadj from: " << fname << std::endl;
+                return;
+            }
         }
 
-        fname = ::android::base::StringPrintf("/proc/%d/cmdline", pid);
-        if (!::android::base::ReadFileToString(fname, &cmdline_)) {
-            err << "Failed to read cmdline from: " << fname << std::endl;
-            cmdline_ = "<unknown>";
-        }
-        // We deliberately don't read the proc/<pid>cmdline file directly into 'cmdline_'
-        // because of some processes showing up cmdlines that end with "0x00 0x0A 0x00"
-        // e.g. xtra-daemon, lowi-server
-        // The .c_str() assignment below then takes care of trimming the cmdline at the first
-        // 0x00. This is how original procrank worked (luckily)
-        cmdline_.resize(strlen(cmdline_.c_str()));
         usage_or_wss_ = get_wss ? procmem->Wss() : procmem->Usage();
         swap_offsets_ = procmem->SwapOffsets();
         pid_ = pid;
@@ -220,7 +225,8 @@ static bool populate_procrank_procs(struct procrank_params* params, uint64_t pgf
     // Mark each swap offset used by the process as we find them for calculating
     // proportional swap usage later.
     for (pid_t pid : pids) {
-        ProcessRecord proc(pid, params->show_wss, pgflags, pgflags_mask, err);
+        ProcessRecord proc(pid, params->show_wss, pgflags, pgflags_mask, true, params->show_oomadj,
+                           err);
 
         if (!proc.valid()) {
             // Check to see if the process is still around, skip the process if the proc
