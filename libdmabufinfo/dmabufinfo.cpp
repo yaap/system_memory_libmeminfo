@@ -84,7 +84,7 @@ static FdInfoResult ReadDmaBufFdInfo(pid_t pid, int fd, std::string* name, std::
             case 'n':
                 if (strncmp(line, "name:", 5) == 0) {
                     const char* c = line + 5;
-                    *name = ::android::base::Trim(std::string(c));
+                    *name = ::android::base::Trim(c);
                 }
                 break;
             case 's':
