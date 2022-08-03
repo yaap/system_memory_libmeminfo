@@ -277,7 +277,7 @@ static void print_procrank_header(struct procrank_params* params, std::stringstr
         }
     }
 
-    out << "cmdline";
+    out << "cmdline" << std::endl;
 }
 
 static void print_procrank_divider(struct procrank_params* params, std::stringstream& out) {
@@ -298,7 +298,7 @@ static void print_procrank_divider(struct procrank_params* params, std::stringst
         }
     }
 
-    out << StringPrintf("%s", "------");
+    out << StringPrintf("%s", "------") << std::endl;
 }
 
 static void print_procrank_processrecord(struct procrank_params* params, ProcessRecord& proc,
@@ -327,28 +327,7 @@ static void print_procrank_processrecord(struct procrank_params* params, Process
             }
         }
     }
-}
-
-static void print_procrank_processes(struct procrank_params* params,
-                                     std::vector<ProcessRecord>& procs,
-                                     const std::vector<uint16_t>& swap_offset_array,
-                                     std::stringstream& out) {
-    for (auto& proc : procs) {
-        params->total_pss += proc.Usage(params->show_wss).pss;
-        params->total_uss += proc.Usage(params->show_wss).uss;
-        if (!params->show_wss && params->swap_enabled) {
-            proc.CalculateSwap(swap_offset_array, params->zram_compression_ratio);
-            params->total_swap += proc.Usage(params->show_wss).swap;
-            params->total_pswap += proc.proportional_swap();
-            params->total_uswap += proc.unique_swap();
-            if (params->zram_enabled) {
-                params->total_zswap += proc.zswap();
-            }
-        }
-
-        print_procrank_processrecord(params, proc, out);
-        out << proc.cmdline() << std::endl;
-    }
+    out << proc.cmdline() << std::endl;
 }
 
 static void print_procrank_totals(struct procrank_params* params, std::stringstream& out) {
@@ -372,7 +351,7 @@ static void print_procrank_totals(struct procrank_params* params, std::stringstr
             }
         }
     }
-    out << "TOTAL";
+    out << "TOTAL" << std::endl << std::endl;
 }
 
 static void print_procrank_sysmeminfo(struct procrank_params* params,
@@ -390,6 +369,22 @@ static void print_procrank_sysmeminfo(struct procrank_params* params,
                         "K buffers, %" PRIu64 "K cached, %" PRIu64 "K shmem, %" PRIu64 "K slab",
                         smi.mem_total_kb(), smi.mem_free_kb(), smi.mem_buffers_kb(),
                         smi.mem_cached_kb(), smi.mem_shmem_kb(), smi.mem_slab_kb());
+    out << std::endl;
+}
+
+static void add_to_procrank_totals(struct procrank_params* params, ProcessRecord& proc,
+                                   const std::vector<uint16_t>& swap_offset_array) {
+    params->total_pss += proc.Usage(params->show_wss).pss;
+    params->total_uss += proc.Usage(params->show_wss).uss;
+    if (!params->show_wss && params->swap_enabled) {
+        proc.CalculateSwap(swap_offset_array, params->zram_compression_ratio);
+        params->total_swap += proc.Usage(params->show_wss).swap;
+        params->total_pswap += proc.proportional_swap();
+        params->total_uswap += proc.unique_swap();
+        if (params->zram_enabled) {
+            params->total_zswap += proc.zswap();
+        }
+    }
 }
 
 bool procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids, bool get_oomadj,
@@ -456,24 +451,16 @@ bool procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pi
         std::sort(procs.begin(), procs.end(), proc_sort);
     }
 
-    // start dumping output in string stream
     print_procrank_header(&params, out);
-    out << std::endl;
 
-    // 2nd pass to calculate and get per process stats to add them up
-    print_procrank_processes(&params, procs, swap_offset_array, out);
+    for (auto& proc : procs) {
+        add_to_procrank_totals(&params, proc, swap_offset_array);
+        print_procrank_processrecord(&params, proc, out);
+    }
 
-    // Add divider to output
     print_procrank_divider(&params, out);
-    out << std::endl;
-
-    // Add totals to output
     print_procrank_totals(&params, out);
-    out << std::endl << std::endl;
-
-    // Add system information at the end
     print_procrank_sysmeminfo(&params, smi, out);
-    out << std::endl;
 
     return true;
 }
