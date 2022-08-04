@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -57,6 +58,7 @@ static pid_t g_pid = -1;
 
 static VmaInfo g_total;
 static std::vector<VmaInfo> g_vmas;
+static std::map<std::string, VmaInfo> g_vmas_name_map;
 
 [[noreturn]] static void usage(const char* progname, int exit_status) {
     fprintf(stderr,
@@ -83,50 +85,31 @@ static bool insert_before(const VmaInfo& a, const VmaInfo& b) {
     return strcmp(a.vma.name.c_str(), b.vma.name.c_str()) < 0;
 }
 
-static void collect_vma(const Vma& vma) {
-    if (g_vmas.empty()) {
-        g_vmas.emplace_back(vma);
-        return;
-    }
-
-    VmaInfo current(vma);
-    VmaInfo& last = g_vmas.back();
-    // determine if this is bss;
-    if (vma.name.empty()) {
-        if (last.vma.end == current.vma.start && is_library(last.vma.name)) {
-            current.vma.name = last.vma.name;
+static void infer_vma_name(VmaInfo& current, const VmaInfo& recent) {
+    if (current.vma.name.empty()) {
+        if (recent.vma.end == current.vma.start && is_library(recent.vma.name)) {
+            current.vma.name = recent.vma.name;
             current.is_bss = true;
         } else {
             current.vma.name = "[anon]";
         }
     }
+}
+
+static void collect_vma(const Vma& vma) {
+    static VmaInfo recent;
+    VmaInfo current(vma);
+    if (g_vmas.empty()) {
+        g_vmas.emplace_back(current);
+        recent = current;
+        return;
+    }
+
+    infer_vma_name(current, recent);
+    recent = current;
 
     std::vector<VmaInfo>::iterator it;
     for (it = g_vmas.begin(); it != g_vmas.end(); it++) {
-        if (g_merge_by_names && (it->vma.name == current.vma.name)) {
-            it->vma.usage.vss += current.vma.usage.vss;
-            it->vma.usage.rss += current.vma.usage.rss;
-            it->vma.usage.pss += current.vma.usage.pss;
-
-            it->vma.usage.shared_clean += current.vma.usage.shared_clean;
-            it->vma.usage.shared_dirty += current.vma.usage.shared_dirty;
-            it->vma.usage.private_clean += current.vma.usage.private_clean;
-            it->vma.usage.private_dirty += current.vma.usage.private_dirty;
-            it->vma.usage.swap += current.vma.usage.swap;
-            it->vma.usage.swap_pss += current.vma.usage.swap_pss;
-
-            it->vma.usage.anon_huge_pages += current.vma.usage.anon_huge_pages;
-            it->vma.usage.shmem_pmd_mapped += current.vma.usage.shmem_pmd_mapped;
-            it->vma.usage.file_pmd_mapped += current.vma.usage.file_pmd_mapped;
-            it->vma.usage.shared_hugetlb += current.vma.usage.shared_hugetlb;
-            it->vma.usage.private_hugetlb += current.vma.usage.private_hugetlb;
-
-            it->is_bss &= current.is_bss;
-            it->count++;
-
-            break;
-        }
-
         if (insert_before(current, *it)) {
             g_vmas.insert(it, current);
             break;
@@ -136,6 +119,44 @@ static void collect_vma(const Vma& vma) {
     if (it == g_vmas.end()) {
         g_vmas.emplace_back(current);
     }
+}
+
+static void collect_vma_merge_by_names(const Vma& vma) {
+    static VmaInfo recent;
+    VmaInfo current(vma);
+    if (g_vmas_name_map.empty()) {
+        g_vmas_name_map.emplace(vma.name, vma);
+        recent = current;
+        return;
+    }
+
+    infer_vma_name(current, recent);
+    recent = current;
+
+    auto iter = g_vmas_name_map.find(current.vma.name);
+    if (iter == g_vmas_name_map.end()) {
+        g_vmas_name_map.emplace(current.vma.name, current);
+        return;
+    }
+    VmaInfo& match = iter->second;
+    match.vma.usage.vss += current.vma.usage.vss;
+    match.vma.usage.rss += current.vma.usage.rss;
+    match.vma.usage.pss += current.vma.usage.pss;
+
+    match.vma.usage.shared_clean += current.vma.usage.shared_clean;
+    match.vma.usage.shared_dirty += current.vma.usage.shared_dirty;
+    match.vma.usage.private_clean += current.vma.usage.private_clean;
+    match.vma.usage.private_dirty += current.vma.usage.private_dirty;
+    match.vma.usage.swap += current.vma.usage.swap;
+    match.vma.usage.swap_pss += current.vma.usage.swap_pss;
+
+    match.vma.usage.anon_huge_pages += current.vma.usage.anon_huge_pages;
+    match.vma.usage.shmem_pmd_mapped += current.vma.usage.shmem_pmd_mapped;
+    match.vma.usage.file_pmd_mapped += current.vma.usage.file_pmd_mapped;
+    match.vma.usage.shared_hugetlb += current.vma.usage.shared_hugetlb;
+    match.vma.usage.private_hugetlb += current.vma.usage.shared_hugetlb;
+
+    match.is_bss &= current.is_bss;
 }
 
 static void print_header() {
@@ -206,7 +227,19 @@ static void print_vmainfo(const VmaInfo& v, bool total) {
 }
 
 static int showmap(void) {
-    if (!::android::meminfo::ForEachVmaFromFile(g_filename, collect_vma)) {
+    bool success;
+    if (!g_merge_by_names) {
+        success = ::android::meminfo::ForEachVmaFromFile(g_filename, collect_vma);
+    } else {
+        success = ::android::meminfo::ForEachVmaFromFile(g_filename, collect_vma_merge_by_names);
+        g_vmas.reserve(g_vmas_name_map.size());
+        // VMAs will be returned in lexicographical order of names.
+        for (const auto& entry : g_vmas_name_map) {
+            g_vmas.emplace_back(entry.second);
+        }
+    }
+
+    if (!success) {
         if (!g_quiet) {
             fprintf(stderr, "Failed to parse file %s\n", g_filename.c_str());
         }
