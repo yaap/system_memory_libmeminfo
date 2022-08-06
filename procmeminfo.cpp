@@ -659,5 +659,69 @@ bool SmapsOrRollupPssFromFile(const std::string& path, uint64_t* pss) {
     return true;
 }
 
+Format GetFormat(std::string_view arg) {
+    if (arg == "json") {
+        return Format::JSON;
+    }
+    if (arg == "csv") {
+        return Format::CSV;
+    }
+    if (arg == "raw") {
+        return Format::RAW;
+    }
+    return Format::INVALID;
+}
+
+std::string EscapeCsvString(const std::string& raw) {
+    std::string ret;
+    for (auto it = raw.cbegin(); it != raw.cend(); it++) {
+        switch (*it) {
+            case '"':
+                ret += "\"";
+                break;
+            default:
+                ret += *it;
+                break;
+        }
+    }
+    return '"' + ret + '"';
+}
+
+std::string EscapeJsonString(const std::string& raw) {
+    std::string ret;
+    for (auto it = raw.cbegin(); it != raw.cend(); it++) {
+        switch (*it) {
+            case '\\':
+                ret += "\\\\";
+                break;
+            case '"':
+                ret += "\\\"";
+                break;
+            case '/':
+                ret += "\\/";
+                break;
+            case '\b':
+                ret += "\\b";
+                break;
+            case '\f':
+                ret += "\\f";
+                break;
+            case '\n':
+                ret += "\\n";
+                break;
+            case '\r':
+                ret += "\\r";
+                break;
+            case '\t':
+                ret += "\\t";
+                break;
+            default:
+                ret += *it;
+                break;
+        }
+    }
+    return '"' + ret + '"';
+}
+
 }  // namespace meminfo
 }  // namespace android
