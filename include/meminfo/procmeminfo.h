@@ -50,8 +50,9 @@ class ProcMemInfo final {
     const std::vector<Vma>& MapsWithoutUsageStats();
 
     // If MapsWithoutUsageStats was called, this function will fill in
-    // usage stats for this single vma.
-    bool FillInVmaStats(Vma& vma);
+    // usage stats for this single vma. If 'use_kb' is true, the vma's
+    // usage will be populated in kilobytes instead of bytes.
+    bool FillInVmaStats(Vma& vma, bool use_kb = false);
 
     // If ReadMaps (with get_usage_stats == false) or MapsWithoutUsageStats was
     // called, this function will fill in usage stats for all vmas in 'maps_'.

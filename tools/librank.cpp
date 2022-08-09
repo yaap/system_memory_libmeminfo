@@ -240,16 +240,16 @@ void to_csv(LibRecord& l, ProcessRecord& p, std::ostream& output) {
     const MemUsage& usage = p.usage();
     // clang-format off
     output << EscapeCsvString(l.name())
-           << "," << l.pss() / 1024
+           << "," << l.pss()
            << "," << EscapeCsvString(p.cmdline())
            << ",\"[" << p.pid() << "]\""
-           << "," << usage.vss / 1024
-           << "," << usage.rss / 1024
-           << "," << usage.pss / 1024
-           << "," << usage.uss / 1024;
+           << "," << usage.vss
+           << "," << usage.rss
+           << "," << usage.pss
+           << "," << usage.uss;
     // clang-format on
     if (g_has_swap) {
-        output << "," << usage.swap / 1024;
+        output << "," << usage.swap;
     }
     output << "\n";
 }
@@ -258,16 +258,16 @@ void to_json(LibRecord& l, ProcessRecord& p, std::ostream& output) {
     const MemUsage& usage = p.usage();
     // clang-format off
     output << "{\"Library\":" << EscapeJsonString(l.name())
-           << ",\"Total_RSS\":" << l.pss() / 1024
+           << ",\"Total_RSS\":" << l.pss()
            << ",\"Process\":" << EscapeJsonString(p.cmdline())
            << ",\"PID\":\"" << p.pid() << "\""
-           << ",\"VSS\":" << usage.vss / 1024
-           << ",\"RSS\":" << usage.rss / 1024
-           << ",\"PSS\":" << usage.pss / 1024
-           << ",\"USS\":" << usage.uss / 1024;
+           << ",\"VSS\":" << usage.vss
+           << ",\"RSS\":" << usage.rss
+           << ",\"PSS\":" << usage.pss
+           << ",\"USS\":" << usage.uss;
     // clang-format on
     if (g_has_swap) {
-        output << ",\"Swap\":" << usage.swap / 1024;
+        output << ",\"Swap\":" << usage.swap;
     }
     output << "}\n";
 }
@@ -397,7 +397,7 @@ int main(int argc, char* argv[]) {
     for (auto& lib : v_libs) {
         if (format == Format::RAW) {
             // clang-format off
-            std::cout << std::setw(6) << lib.pss() / 1024 << "K"
+            std::cout << std::setw(6) << lib.pss() << "K"
                       << std::setw(10) << ""
                       << std::setw(9) << ""
                       << std::setw(9) << ""
@@ -426,13 +426,13 @@ int main(int argc, char* argv[]) {
                 case Format::RAW:
                     // clang-format off
                     std::cout << std::setw(7) << ""
-                              << std::setw(9) << usage.vss / 1024 << "K  "
-                              << std::setw(6) << usage.rss / 1024 << "K  "
-                              << std::setw(6) << usage.pss / 1024 << "K  "
-                              << std::setw(6) << usage.uss / 1024 << "K  ";
+                              << std::setw(9) << usage.vss << "K  "
+                              << std::setw(6) << usage.rss << "K  "
+                              << std::setw(6) << usage.pss << "K  "
+                              << std::setw(6) << usage.uss << "K  ";
                     // clang-format on
                     if (g_has_swap) {
-                        std::cout << std::setw(6) << usage.swap / 1024 << "K  ";
+                        std::cout << std::setw(6) << usage.swap << "K  ";
                     }
                     std::cout << "  " << p.cmdline() << " [" << p.pid() << "]\n";
                     break;
