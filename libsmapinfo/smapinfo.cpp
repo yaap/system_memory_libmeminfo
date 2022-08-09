@@ -102,6 +102,10 @@ struct ProcessRecord {
             unique_swap_ += swap_offset_array[off] == 1 ? getpagesize() : 0;
             zswap_ = proportional_swap_ * zram_compression_ratio;
         }
+        // This is divided by 1024 to convert to KB.
+        proportional_swap_ /= 1024;
+        unique_swap_ /= 1024;
+        zswap_ /= 1024;
     }
 
     // Getters
@@ -310,20 +314,18 @@ static void print_procrank_processrecord(struct procrank_params* params, Process
 
     if (params->show_wss) {
         out << StringPrintf("%6" PRIu64 "K  %6" PRIu64 "K  %6" PRIu64 "K  ",
-                            proc.Usage(params->show_wss).rss / 1024,
-                            proc.Usage(params->show_wss).pss / 1024,
-                            proc.Usage(params->show_wss).uss / 1024);
+                            proc.Usage(params->show_wss).rss, proc.Usage(params->show_wss).pss,
+                            proc.Usage(params->show_wss).uss);
     } else {
-        out << StringPrintf(
-                "%7" PRIu64 "K  %6" PRIu64 "K  %6" PRIu64 "K  %6" PRIu64 "K  ",
-                proc.Usage(params->show_wss).vss / 1024, proc.Usage(params->show_wss).rss / 1024,
-                proc.Usage(params->show_wss).pss / 1024, proc.Usage(params->show_wss).uss / 1024);
+        out << StringPrintf("%7" PRIu64 "K  %6" PRIu64 "K  %6" PRIu64 "K  %6" PRIu64 "K  ",
+                            proc.Usage(params->show_wss).vss, proc.Usage(params->show_wss).rss,
+                            proc.Usage(params->show_wss).pss, proc.Usage(params->show_wss).uss);
         if (params->swap_enabled) {
-            out << StringPrintf("%6" PRIu64 "K  ", proc.Usage(params->show_wss).swap / 1024);
-            out << StringPrintf("%6" PRIu64 "K  ", proc.proportional_swap() / 1024);
-            out << StringPrintf("%6" PRIu64 "K  ", proc.unique_swap() / 1024);
+            out << StringPrintf("%6" PRIu64 "K  ", proc.Usage(params->show_wss).swap);
+            out << StringPrintf("%6" PRIu64 "K  ", proc.proportional_swap());
+            out << StringPrintf("%6" PRIu64 "K  ", proc.unique_swap());
             if (params->zram_enabled) {
-                out << StringPrintf("%6" PRIu64 "K  ", (proc.zswap() / 1024));
+                out << StringPrintf("%6" PRIu64 "K  ", (proc.zswap()));
             }
         }
     }
@@ -337,17 +339,17 @@ static void print_procrank_totals(struct procrank_params* params, std::stringstr
     }
 
     if (params->show_wss) {
-        out << StringPrintf("%7s  %6" PRIu64 "K  %6" PRIu64 "K  ", "", params->total_pss / 1024,
-                            params->total_uss / 1024);
+        out << StringPrintf("%7s  %6" PRIu64 "K  %6" PRIu64 "K  ", "", params->total_pss,
+                            params->total_uss);
     } else {
-        out << StringPrintf("%8s  %7s  %6" PRIu64 "K  %6" PRIu64 "K  ", "", "",
-                            params->total_pss / 1024, params->total_uss / 1024);
+        out << StringPrintf("%8s  %7s  %6" PRIu64 "K  %6" PRIu64 "K  ", "", "", params->total_pss,
+                            params->total_uss);
         if (params->swap_enabled) {
-            out << StringPrintf("%6" PRIu64 "K  ", params->total_swap / 1024);
-            out << StringPrintf("%6" PRIu64 "K  ", params->total_pswap / 1024);
-            out << StringPrintf("%6" PRIu64 "K  ", params->total_uswap / 1024);
+            out << StringPrintf("%6" PRIu64 "K  ", params->total_swap);
+            out << StringPrintf("%6" PRIu64 "K  ", params->total_pswap);
+            out << StringPrintf("%6" PRIu64 "K  ", params->total_uswap);
             if (params->zram_enabled) {
-                out << StringPrintf("%6" PRIu64 "K  ", params->total_zswap / 1024);
+                out << StringPrintf("%6" PRIu64 "K  ", params->total_zswap);
             }
         }
     }
