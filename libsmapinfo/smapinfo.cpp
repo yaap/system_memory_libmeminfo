@@ -88,6 +88,9 @@ struct ProcessRecord {
             }
         }
 
+        // We want to use Smaps() to populate procmem's maps before calling Wss() or Usage(), as
+        // these will fall back on the slower ReadMaps().
+        procmem->Smaps("", true);
         usage_or_wss_ = get_wss ? procmem->Wss() : procmem->Usage();
         swap_offsets_ = procmem->SwapOffsets();
         pid_ = pid;
@@ -325,7 +328,7 @@ static void print_procrank_processrecord(struct procrank_params* params, Process
             out << StringPrintf("%6" PRIu64 "K  ", proc.proportional_swap());
             out << StringPrintf("%6" PRIu64 "K  ", proc.unique_swap());
             if (params->zram_enabled) {
-                out << StringPrintf("%6" PRIu64 "K  ", (proc.zswap()));
+                out << StringPrintf("%6" PRIu64 "K  ", proc.zswap());
             }
         }
     }
