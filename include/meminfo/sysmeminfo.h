@@ -97,10 +97,12 @@ class SysMemInfo final {
     uint64_t mem_inactive_kb() const { return find_mem_by_tag(kMemInactive); }
     uint64_t mem_unevictable_kb() const { return find_mem_by_tag(kMemUnevictable); }
     uint64_t mem_zram_kb(const char* zram_dev = nullptr) const;
+    uint64_t mem_compacted_kb(const char* zram_dev = nullptr);
 
   private:
     std::map<std::string_view, uint64_t> mem_in_kb_;
     bool MemZramDevice(const char* zram_dev, uint64_t* mem_zram_dev) const;
+    bool GetTotalMemCompacted(const char* zram_dev, uint64_t* out_mem_compacted);
     bool ReadMemInfo(const char* path, size_t ntags, const std::string_view* tags,
                      std::function<void(std::string_view, uint64_t)> store_val);
     // Convenience function to avoid duplicating code for each memory category.
