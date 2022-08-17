@@ -16,8 +16,17 @@
 
 #pragma once
 
+#include <cstdint>
+#include <set>
+#include <sstream>
+#include <string>
+#include <vector>
+
 namespace android {
 namespace smapinfo {
+
+// The user-specified order to sort processes.
+enum class SortOrder { BY_PSS = 0, BY_RSS, BY_USS, BY_VSS, BY_SWAP, BY_OOMADJ };
 
 // Populates the input set with all pids present in the /proc directory. Only
 // returns false if /proc could not be opened, returns true otherwise.
@@ -28,9 +37,17 @@ bool get_all_pids(std::set<pid_t>* pids);
 // a) system memory information could not be read,
 // b) swap offsets could not be counted for some process,
 // c) reset_wss is true but the working set for some process could not be reset.
-bool procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids, bool get_oomadj,
-              bool get_wss, int sort_order, bool reverse_sort, std::stringstream& out,
-              std::stringstream& err);
+bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
+                  bool get_oomadj, bool get_wss, SortOrder sort_order, bool reverse_sort,
+                  std::stringstream& out, std::stringstream& err);
+
+// Sorts libraries used by processes in 'pids' by memory usage and prints them.
+// Returns false if any process's usage info could not be read.
+bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
+                 const std::string& lib_prefix, bool all_libs,
+                 const std::vector<std::string>& excluded_libs, uint16_t mapflags_mask,
+                 android::meminfo::Format format, SortOrder sort_order, bool reverse_sort,
+                 std::stringstream& out, std::stringstream& err);
 
 }  // namespace smapinfo
 }  // namespace android
