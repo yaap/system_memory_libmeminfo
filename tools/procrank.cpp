@@ -31,6 +31,8 @@
 
 #include <smapinfo.h>
 
+using ::android::smapinfo::SortOrder;
+
 [[noreturn]] static void usage(int exit_status) {
     std::cerr << "Usage: " << getprogname() << " [ -W ] [ -v | -r | -p | -u | -s | -h ] [-d PID]"
               << std::endl
@@ -53,15 +55,13 @@
     exit(exit_status);
 }
 
-enum SortOrder { BY_PSS = 0, BY_RSS, BY_USS, BY_VSS, BY_SWAP, BY_OOMADJ };
-
 int main(int argc, char* argv[]) {
     // Count all pages by default.
     uint64_t pgflags = 0;
     uint64_t pgflags_mask = 0;
 
     // Sort by PSS descending by default.
-    SortOrder sort_order = BY_PSS;
+    SortOrder sort_order = SortOrder::BY_PSS;
     bool reverse_sort = false;
 
     bool get_oomadj = false;
@@ -97,26 +97,26 @@ int main(int argc, char* argv[]) {
                 pgflags_mask = (1 << KPF_KSM);
                 break;
             case 'o':
-                sort_order = BY_OOMADJ;
+                sort_order = SortOrder::BY_OOMADJ;
                 get_oomadj = true;
                 break;
             case 'p':
-                sort_order = BY_PSS;
+                sort_order = SortOrder::BY_PSS;
                 break;
             case 'r':
-                sort_order = BY_RSS;
+                sort_order = SortOrder::BY_RSS;
                 break;
             case 'R':
                 reverse_sort = true;
                 break;
             case 's':
-                sort_order = BY_SWAP;
+                sort_order = SortOrder::BY_SWAP;
                 break;
             case 'u':
-                sort_order = BY_USS;
+                sort_order = SortOrder::BY_USS;
                 break;
             case 'v':
-                sort_order = BY_VSS;
+                sort_order = SortOrder::BY_VSS;
                 break;
             case 'w':
                 get_wss = true;
@@ -187,8 +187,8 @@ int main(int argc, char* argv[]) {
 
     std::stringstream out;
     std::stringstream err;
-    bool success = ::android::smapinfo::procrank(pgflags, pgflags_mask, pids, get_oomadj, get_wss,
-                                                 sort_order, reverse_sort, out, err);
+    bool success = ::android::smapinfo::run_procrank(pgflags, pgflags_mask, pids, get_oomadj,
+                                                     get_wss, sort_order, reverse_sort, out, err);
     std::cout << out.str();
     std::cerr << err.str();
     if (!success) {
