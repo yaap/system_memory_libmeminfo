@@ -49,7 +49,7 @@ using ::android::meminfo::Vma;
 struct ProcessRecord {
   public:
     ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t pgflags_mask,
-                  bool get_cmdline, bool get_oomadj, std::stringstream& err)
+                  bool get_cmdline, bool get_oomadj, std::ostream& err)
         : pid_(-1),
           oomadj_(OOM_SCORE_ADJ_MAX + 1),
           proportional_swap_(0),
@@ -159,7 +159,7 @@ bool get_all_pids(std::set<pid_t>* pids) {
 namespace procrank {
 
 static bool count_swap_offsets(const ProcessRecord& proc, std::vector<uint16_t>& swap_offset_array,
-                               std::stringstream& err) {
+                               std::ostream& err) {
     const std::vector<uint64_t>& swp_offs = proc.SwapOffsets();
     for (auto& off : swp_offs) {
         if (off >= swap_offset_array.size()) {
@@ -235,7 +235,7 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_sort(struc
 
 static bool populate_procs(struct params* params, uint64_t pgflags, uint64_t pgflags_mask,
                            std::vector<uint16_t>& swap_offset_array, const std::set<pid_t>& pids,
-                           std::vector<ProcessRecord>* procs, std::stringstream& err) {
+                           std::vector<ProcessRecord>* procs, std::ostream& err) {
     // Mark each swap offset used by the process as we find them for calculating
     // proportional swap usage later.
     for (pid_t pid : pids) {
@@ -272,7 +272,7 @@ static bool populate_procs(struct params* params, uint64_t pgflags, uint64_t pgf
     return true;
 }
 
-static void print_header(struct params* params, std::stringstream& out) {
+static void print_header(struct params* params, std::ostream& out) {
     out << StringPrintf("%5s  ", "PID");
     if (params->show_oomadj) {
         out << StringPrintf("%5s  ", "oom");
@@ -294,7 +294,7 @@ static void print_header(struct params* params, std::stringstream& out) {
     out << "cmdline\n";
 }
 
-static void print_divider(struct params* params, std::stringstream& out) {
+static void print_divider(struct params* params, std::ostream& out) {
     out << StringPrintf("%5s  ", "");
     if (params->show_oomadj) {
         out << StringPrintf("%5s  ", "");
@@ -315,8 +315,7 @@ static void print_divider(struct params* params, std::stringstream& out) {
     out << StringPrintf("%s\n", "------");
 }
 
-static void print_processrecord(struct params* params, ProcessRecord& proc,
-                                std::stringstream& out) {
+static void print_processrecord(struct params* params, ProcessRecord& proc, std::ostream& out) {
     out << StringPrintf("%5d  ", proc.pid());
     if (params->show_oomadj) {
         out << StringPrintf("%5d  ", proc.oomadj());
@@ -342,7 +341,7 @@ static void print_processrecord(struct params* params, ProcessRecord& proc,
     out << proc.cmdline() << "\n";
 }
 
-static void print_totals(struct params* params, std::stringstream& out) {
+static void print_totals(struct params* params, std::ostream& out) {
     out << StringPrintf("%5s  ", "");
     if (params->show_oomadj) {
         out << StringPrintf("%5s  ", "");
@@ -367,7 +366,7 @@ static void print_totals(struct params* params, std::stringstream& out) {
 }
 
 static void print_sysmeminfo(struct params* params, const ::android::meminfo::SysMemInfo& smi,
-                             std::stringstream& out) {
+                             std::ostream& out) {
     if (params->swap_enabled) {
         out << StringPrintf("ZRAM: %" PRIu64 "K physical used for %" PRIu64 "K in swap (%" PRIu64
                             "K total swap)\n",
@@ -400,7 +399,7 @@ static void add_to_totals(struct params* params, ProcessRecord& proc,
 
 bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
                   bool get_oomadj, bool get_wss, SortOrder sort_order, bool reverse_sort,
-                  std::stringstream& out, std::stringstream& err) {
+                  std::ostream& out, std::ostream& err) {
     ::android::meminfo::SysMemInfo smi;
     if (!smi.ReadMemInfo()) {
         err << "Failed to get system memory info\n";
@@ -588,7 +587,7 @@ struct params {
 
 static bool populate_libs(struct params* params, uint64_t pgflags, uint64_t pgflags_mask,
                           const std::set<pid_t>& pids,
-                          std::map<std::string, LibRecord>& lib_name_map, std::stringstream& err) {
+                          std::map<std::string, LibRecord>& lib_name_map, std::ostream& err) {
     for (pid_t pid : pids) {
         ProcessRecord proc(pid, false, pgflags, pgflags_mask, true, params->show_oomadj, err);
         if (!proc.valid()) {
@@ -632,7 +631,7 @@ static bool populate_libs(struct params* params, uint64_t pgflags, uint64_t pgfl
     return true;
 }
 
-static void print_header(struct params* params, std::stringstream& out) {
+static void print_header(struct params* params, std::ostream& out) {
     switch (params->format) {
         case Format::RAW:
             // clang-format off
@@ -670,7 +669,7 @@ static void print_header(struct params* params, std::stringstream& out) {
 }
 
 static void print_library(struct params* params, const LibRecord& lib,
-                          std::stringstream& out) {
+                          std::ostream& out) {
     if (params->format == Format::RAW) {
         // clang-format off
         out << std::setw(6) << lib.pss() << "K"
@@ -692,8 +691,7 @@ static void print_library(struct params* params, const LibRecord& lib,
     }
 }
 
-static void print_proc_as_raw(struct params* params, const LibProcRecord& p,
-                              std::stringstream& out) {
+static void print_proc_as_raw(struct params* params, const LibProcRecord& p, std::ostream& out) {
     const MemUsage& usage = p.usage();
     // clang-format off
     out << std::setw(7) << ""
@@ -712,7 +710,7 @@ static void print_proc_as_raw(struct params* params, const LibProcRecord& p,
 }
 
 static void print_proc_as_json(struct params* params, const LibRecord& l, const LibProcRecord& p,
-                               std::stringstream& out) {
+                               std::ostream& out) {
     const MemUsage& usage = p.usage();
     // clang-format off
     out << "{\"Library\":" << EscapeJsonString(l.name())
@@ -734,7 +732,7 @@ static void print_proc_as_json(struct params* params, const LibRecord& l, const 
 }
 
 static void print_proc_as_csv(struct params* params, const LibRecord& l, const LibProcRecord& p,
-                              std::stringstream& out) {
+                              std::ostream& out) {
     const MemUsage& usage = p.usage();
     // clang-format off
     out << EscapeCsvString(l.name())
@@ -756,7 +754,7 @@ static void print_proc_as_csv(struct params* params, const LibRecord& l, const L
 }
 
 static void print_procs(struct params* params, const LibRecord& lib,
-                        const std::vector<LibProcRecord>& procs, std::stringstream& out) {
+                        const std::vector<LibProcRecord>& procs, std::ostream& out) {
     for (const LibProcRecord& p : procs) {
         switch (params->format) {
             case Format::RAW:
@@ -779,8 +777,8 @@ static void print_procs(struct params* params, const LibRecord& lib,
 bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
                  const std::string& lib_prefix, bool all_libs,
                  const std::vector<std::string>& excluded_libs, uint16_t mapflags_mask,
-                 Format format, SortOrder sort_order, bool reverse_sort, std::stringstream& out,
-                 std::stringstream& err) {
+                 Format format, SortOrder sort_order, bool reverse_sort, std::ostream& out,
+                 std::ostream& err) {
     struct librank::params params = {
             .lib_prefix = lib_prefix,
             .all_libs = all_libs,

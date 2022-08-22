@@ -17,8 +17,8 @@
 #pragma once
 
 #include <cstdint>
+#include <ostream>
 #include <set>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -39,7 +39,7 @@ bool get_all_pids(std::set<pid_t>* pids);
 // c) reset_wss is true but the working set for some process could not be reset.
 bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
                   bool get_oomadj, bool get_wss, SortOrder sort_order, bool reverse_sort,
-                  std::stringstream& out, std::stringstream& err);
+                  std::ostream& out, std::ostream& err);
 
 // Sorts libraries used by processes in 'pids' by memory usage and prints them.
 // Returns false if any process's usage info could not be read.
@@ -47,7 +47,7 @@ bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>&
                  const std::string& lib_prefix, bool all_libs,
                  const std::vector<std::string>& excluded_libs, uint16_t mapflags_mask,
                  android::meminfo::Format format, SortOrder sort_order, bool reverse_sort,
-                 std::stringstream& out, std::stringstream& err);
+                 std::ostream& out, std::ostream& err);
 
 }  // namespace smapinfo
 }  // namespace android
