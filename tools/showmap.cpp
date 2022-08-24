@@ -451,7 +451,7 @@ int main(int argc, char* argv[]) {
 
     Format format = Format::RAW;
     int opt;
-    while ((opt = getopt_long(argc, argv, "tvaqfo:h", longopts, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "tvaqf:o:h", longopts, nullptr)) != -1) {
         switch (opt) {
             case 't':
                 g_terse = true;
