@@ -110,7 +110,8 @@ void VmaInfo::to_raw(std::ostream& output, bool total) const {
            << std::setw(9) << vma.usage.shmem_pmd_mapped << " "
            << std::setw(9) << vma.usage.file_pmd_mapped << " "
            << std::setw(8) << vma.usage.shared_hugetlb << " "
-           << std::setw(8) << vma.usage.private_hugetlb << " ";
+           << std::setw(8) << vma.usage.private_hugetlb << " "
+           << std::setw(8) << vma.usage.locked << " ";
     // clang-format on
     if (!g_verbose && !g_show_addr) {
         output << std::setw(4) << count << " ";
@@ -140,7 +141,8 @@ void VmaInfo::to_csv(std::ostream& output, bool total) const {
            << "," << vma.usage.shmem_pmd_mapped
            << "," << vma.usage.file_pmd_mapped
            << "," << vma.usage.shared_hugetlb
-           << "," << vma.usage.private_hugetlb;
+           << "," << vma.usage.private_hugetlb
+           << "," << vma.usage.locked;
     // clang-format on
     if (g_show_addr) {
         output << ",";
@@ -177,7 +179,8 @@ void VmaInfo::to_json(std::ostream& output, bool total) const {
            << ",\"Shmem PmdMapped\":" << vma.usage.shmem_pmd_mapped
            << ",\"File PmdMapped\":" << vma.usage.file_pmd_mapped
            << ",\"Shared Hugetlb\":" << vma.usage.shared_hugetlb
-           << ",\"Private Hugetlb\":" << vma.usage.private_hugetlb;
+           << ",\"Private Hugetlb\":" << vma.usage.private_hugetlb
+           << ",\"Locked\":" << vma.usage.locked;
     // clang-format on
     if (g_show_addr) {
         if (total) {
@@ -310,7 +313,7 @@ static void print_header(std::ostream& output) {
         output << "            addr             addr ";
     }
     output << "    size      RSS      PSS    clean    dirty    clean    dirty     swap  swapPSS "
-              "HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb";
+              "HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb   Locked";
     if (!g_verbose && !g_show_addr) {
         output << "   # ";
     }
@@ -325,7 +328,7 @@ static void print_divider(std::ostream& output) {
         output << "-------- -------- ";
     }
     output << "-------- -------- -------- -------- -------- -------- -------- -------- -------- "
-           << "--------- --------- --------- -------- -------- ";
+           << "--------- --------- --------- -------- -------- -------- ";
     if (!g_verbose && !g_show_addr) {
         output << "---- ";
     }
@@ -367,7 +370,7 @@ static int showmap(Format format) {
                          "clean\",\"private dirty\",\"swap\",\"swapPSS\",\"Anon "
                          "HugePages\",\"Shmem "
                          "PmdMapped\",\"File PmdMapped\",\"Shared Hugetlb\",\"Private "
-                         "Hugetlb\"";
+                         "Hugetlb\",\"Locked\"";
             if (g_show_addr) {
                 std::cout << ",\"start addr\",\"end addr\"";
             }
