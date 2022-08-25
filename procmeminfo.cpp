@@ -144,6 +144,11 @@ static bool parse_smaps_field(const char* line, MemUsage* stats) {
                     stats->file_pmd_mapped = strtoull(c, nullptr, 10);
                 }
                 break;
+            case 'L':
+                if (strncmp(line, "Locked:", 7) == 0) {
+                    stats->locked = strtoull(c, nullptr, 10);
+                }
+                break;
         }
         return true;
     }
