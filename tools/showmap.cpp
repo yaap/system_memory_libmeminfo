@@ -52,13 +52,13 @@ static pid_t g_pid = -1;
 
 static std::string get_vma_name(const Vma& vma, bool total, bool is_bss) {
     if (total) {
-        return std::string("TOTAL");
+        return "TOTAL";
     }
-    std::string vmaName(vma.name);
+    std::string vma_name = vma.name;
     if (is_bss) {
-        vmaName += std::string(" [bss]");
+        vma_name.append(" [bss]");
     }
-    return vmaName;
+    return vma_name;
 }
 
 static std::string get_flags(const Vma& vma, bool total) {
@@ -119,9 +119,9 @@ void VmaInfo::to_raw(std::ostream& output, bool total) const {
     }
     if (g_verbose) {
         if (total) {
-            output << "       ";
+            output << "      ";
         } else {
-            output << std::setw(6) << get_flags(vma, total) << " ";
+            output << std::setw(5) << get_flags(vma, total) << " ";
         }
     }
     output << get_vma_name(vma, total, is_bss) << "\n";
@@ -202,8 +202,8 @@ void VmaInfo::to_json(std::ostream& output, bool total) const {
 
 static std::multimap<std::string, VmaInfo> g_vmas;
 
-[[noreturn]] static void usage(const char* progname, int exit_status) {
-    std::cerr << progname << " [-aqtv] [-f FILE] PID\n"
+[[noreturn]] static void usage(int exit_status) {
+    std::cerr << "showmap [-aqtv] [-f FILE] PID\n"
               << "-a\taddresses (show virtual memory map)\n"
               << "-q\tquiet (don't show error if map could not be read)\n"
               << "-t\tterse (show only items with private pages)\n"
@@ -297,30 +297,29 @@ static void collect_vma(const Vma& vma) {
     match.is_bss &= current.is_bss;
 }
 
-static void print_header(std::ostream& output) {
+static void print_text_header(std::ostream& output) {
     if (g_show_addr) {
         output << "           start              end ";
     }
     output << " virtual                     shared   shared  private  private                   "
-              "Anon      Shmem     File       Shared   Private\n";
-
+              "Anon      Shmem     File      Shared   Private\n";
     if (g_show_addr) {
         output << "            addr             addr ";
     }
     output << "    size      RSS      PSS    clean    dirty    clean    dirty     swap  swapPSS "
-              "HugePages PmdMapped PmdMapped  Hugetlb  Hugetlb   Locked";
+              "HugePages PmdMapped PmdMapped Hugetlb  Hugetlb    Locked ";
     if (!g_verbose && !g_show_addr) {
         output << "   # ";
     }
     if (g_verbose) {
-        output << " flags ";
+        output << "flags ";
     }
-    output << " object\n";
+    output << "object\n";
 }
 
-static void print_divider(std::ostream& output) {
+static void print_text_divider(std::ostream& output) {
     if (g_show_addr) {
-        output << "-------- -------- ";
+        output << "---------------- ---------------- ";
     }
     output << "-------- -------- -------- -------- -------- -------- -------- -------- -------- "
            << "--------- --------- --------- -------- -------- -------- ";
@@ -328,9 +327,80 @@ static void print_divider(std::ostream& output) {
         output << "---- ";
     }
     if (g_verbose) {
-        output << "------ ";
+        output << "----- ";
     }
     output << "------------------------------\n";
+}
+
+static void print_csv_header(std::ostream& output) {
+    output << "\"virtual size\",\"RSS\",\"PSS\",\"shared clean\",\"shared dirty\","
+              "\"private clean\",\"private dirty\",\"swap\",\"swapPSS\",\"Anon HugePages\","
+              "\"Shmem PmdMapped\",\"File PmdMapped\",\"Shared Hugetlb\",\"Private Hugetlb\","
+              "\"Locked\"";
+    if (g_show_addr) {
+        output << ",\"start addr\",\"end addr\"";
+    }
+    if (!g_verbose && !g_show_addr) {
+        output << ",\"#\"";
+    }
+    if (g_verbose) {
+        output << ",\"flags\"";
+    }
+    output << ",\"object\"\n";
+}
+
+static void print_header(Format format, std::ostream& output) {
+    switch (format) {
+        case Format::RAW:
+            print_text_header(output);
+            print_text_divider(output);
+            break;
+        case Format::CSV:
+            print_csv_header(output);
+            break;
+        case Format::JSON:
+            output << "[";
+            break;
+        default:
+            break;
+    }
+}
+
+static void print_vmainfo(const VmaInfo& v, Format format, std::ostream& output) {
+    switch (format) {
+        case Format::RAW:
+            v.to_raw(output, false);
+            break;
+        case Format::CSV:
+            v.to_csv(output, false);
+            break;
+        case Format::JSON:
+            v.to_json(output, false);
+            output << ",";
+            break;
+        default:
+            break;
+    }
+}
+
+static void print_vmainfo_totals(const VmaInfo& total_usage, Format format, std::ostream& output) {
+    switch (format) {
+        case Format::RAW:
+            print_text_divider(output);
+            print_text_header(output);
+            print_text_divider(output);
+            total_usage.to_raw(output, true);
+            break;
+        case Format::CSV:
+            total_usage.to_csv(output, true);
+            break;
+        case Format::JSON:
+            total_usage.to_json(output, true);
+            output << "]\n";
+            break;
+        default:
+            break;
+    }
 }
 
 static int showmap(Format format) {
@@ -341,36 +411,7 @@ static int showmap(Format format) {
         return 1;
     }
 
-    // Headers
-    switch (format) {
-        case Format::RAW:
-            print_header(std::cout);
-            print_divider(std::cout);
-            break;
-        case Format::CSV:
-            std::cout << "\"virtual size\",\"RSS\",\"PSS\",\"shared clean\",\"shared "
-                         "dirty\",\"private "
-                         "clean\",\"private dirty\",\"swap\",\"swapPSS\",\"Anon "
-                         "HugePages\",\"Shmem "
-                         "PmdMapped\",\"File PmdMapped\",\"Shared Hugetlb\",\"Private "
-                         "Hugetlb\",\"Locked\"";
-            if (g_show_addr) {
-                std::cout << ",\"start addr\",\"end addr\"";
-            }
-            if (!g_verbose && !g_show_addr) {
-                std::cout << ",\"#\"";
-            }
-            if (g_verbose) {
-                std::cout << ",\"flags\"";
-            }
-            std::cout << ",\"object\"\n";
-            break;
-        case Format::JSON:
-            std::cout << "[";
-            break;
-        default:
-            break;
-    }
+    print_header(format, std::cout);
 
     VmaInfo total_usage;
     for (const auto& entry : g_vmas) {
@@ -380,40 +421,9 @@ static int showmap(Format format) {
             continue;
         }
 
-        switch (format) {
-            case Format::RAW:
-                v.to_raw(std::cout, false);
-                break;
-            case Format::CSV:
-                v.to_csv(std::cout, false);
-                break;
-            case Format::JSON:
-                v.to_json(std::cout, false);
-                std::cout << ",";
-                break;
-            default:
-                break;
-        }
+        print_vmainfo(v, format, std::cout);
     }
-
-    // Output total vma info
-    switch (format) {
-        case Format::RAW:
-            print_divider(std::cout);
-            print_header(std::cout);
-            print_divider(std::cout);
-            total_usage.to_raw(std::cout, true);
-            break;
-        case Format::CSV:
-            total_usage.to_csv(std::cout, true);
-            break;
-        case Format::JSON:
-            total_usage.to_json(std::cout, true);
-            std::cout << "]\n";
-            break;
-        default:
-            break;
-    }
+    print_vmainfo_totals(total_usage, format, std::cout);
 
     return 0;
 }
@@ -448,26 +458,26 @@ int main(int argc, char* argv[]) {
                 format = GetFormat(optarg);
                 if (format == Format::INVALID) {
                     std::cerr << "Invalid format.\n";
-                    usage(argv[0], EXIT_FAILURE);
+                    usage(EXIT_FAILURE);
                 }
                 break;
             case 'h':
-                usage(argv[0], EXIT_SUCCESS);
+                usage(EXIT_SUCCESS);
             default:
-                usage(argv[0], EXIT_FAILURE);
+                usage(EXIT_FAILURE);
         }
     }
 
     if (g_filename.empty()) {
         if ((argc - 1) < optind) {
             std::cerr << "Invalid arguments: Must provide <pid> at the end\n";
-            usage(argv[0], EXIT_FAILURE);
+            usage(EXIT_FAILURE);
         }
 
         g_pid = atoi(argv[optind]);
         if (g_pid <= 0) {
             std::cerr << "Invalid process id " << argv[optind] << "\n";
-            usage(argv[0], EXIT_FAILURE);
+            usage(EXIT_FAILURE);
         }
 
         g_filename = ::android::base::StringPrintf("/proc/%d/smaps", g_pid);
