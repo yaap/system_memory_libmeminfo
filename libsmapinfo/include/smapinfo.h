@@ -49,5 +49,11 @@ bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>&
                  android::meminfo::Format format, SortOrder sort_order, bool reverse_sort,
                  std::ostream& out, std::ostream& err);
 
+// Retrieves showmap information from the provided pid (or file) and prints it.
+// Returns false if there are no maps associated with 'pid' or if the file
+// denoted by 'filename' is malformed.
+bool run_showmap(pid_t pid, const std::string& filename, bool terse, bool verbose, bool show_addr,
+                 bool quiet, android::meminfo::Format format, std::ostream& out, std::ostream& err);
+
 }  // namespace smapinfo
 }  // namespace android
