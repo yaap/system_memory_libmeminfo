@@ -45,6 +45,7 @@ using ::android::meminfo::Format;
 using ::android::meminfo::MemUsage;
 using ::android::meminfo::ProcMemInfo;
 using ::android::meminfo::Vma;
+using ::android::meminfo::VmaCallback;
 
 struct ProcessRecord {
   public:
@@ -129,6 +130,9 @@ struct ProcessRecord {
     // This will not result in a second reading of the smaps file because procmem_->Smaps() has
     // already been called in the constructor.
     const std::vector<Vma>& Smaps() const { return procmem_->Smaps(); }
+    bool ForEachExistingVma(const VmaCallback& callback) {
+        return procmem_->ForEachExistingVma(callback);
+    }
 
   private:
     std::unique_ptr<ProcMemInfo> procmem_;
@@ -826,6 +830,396 @@ bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>&
         librank::print_library(&params, lib, out);
         librank::print_procs(&params, lib, procs, out);
     }
+
+    return true;
+}
+
+namespace showmap {
+
+// These are defined as static variables instead of a struct (as in procrank::params and
+// librank::params) because the collect_vma callback references them.
+static bool show_addr;
+static bool verbose;
+
+static std::string get_vma_name(const Vma& vma, bool total, bool is_bss) {
+    if (total) {
+        return "TOTAL";
+    }
+    std::string vma_name = vma.name;
+    if (is_bss) {
+        vma_name.append(" [bss]");
+    }
+    return vma_name;
+}
+
+static std::string get_flags(const Vma& vma, bool total) {
+    std::string flags_str("---");
+    if (verbose && !total) {
+        if (vma.flags & PROT_READ) flags_str[0] = 'r';
+        if (vma.flags & PROT_WRITE) flags_str[1] = 'w';
+        if (vma.flags & PROT_EXEC) flags_str[2] = 'x';
+    }
+    return flags_str;
+}
+
+struct VmaInfo {
+    Vma vma;
+    bool is_bss;
+    uint32_t count;
+
+    VmaInfo() = default;
+    VmaInfo(const Vma& v) : vma(v), is_bss(false), count(1) {}
+    VmaInfo(const Vma& v, bool bss) : vma(v), is_bss(bss), count(1) {}
+    VmaInfo(const Vma& v, const std::string& name, bool bss) : vma(v), is_bss(bss), count(1) {
+        vma.name = name;
+    }
+
+    void to_raw(bool total, std::ostream& out) const;
+    void to_csv(bool total, std::ostream& out) const;
+    void to_json(bool total, std::ostream& out) const;
+};
+
+void VmaInfo::to_raw(bool total, std::ostream& out) const {
+    if (show_addr) {
+        if (total) {
+            out << "                                  ";
+        } else {
+            out << std::hex << std::setw(16) << vma.start << " " << std::setw(16) << vma.end << " "
+                << std::dec;
+        }
+    }
+    // clang-format off
+    out << std::setw(8) << vma.usage.vss << " "
+        << std::setw(8) << vma.usage.rss << " "
+        << std::setw(8) << vma.usage.pss << " "
+        << std::setw(8) << vma.usage.shared_clean << " "
+        << std::setw(8) << vma.usage.shared_dirty << " "
+        << std::setw(8) << vma.usage.private_clean << " "
+        << std::setw(8) << vma.usage.private_dirty << " "
+        << std::setw(8) << vma.usage.swap << " "
+        << std::setw(8) << vma.usage.swap_pss << " "
+        << std::setw(9) << vma.usage.anon_huge_pages << " "
+        << std::setw(9) << vma.usage.shmem_pmd_mapped << " "
+        << std::setw(9) << vma.usage.file_pmd_mapped << " "
+        << std::setw(8) << vma.usage.shared_hugetlb << " "
+        << std::setw(8) << vma.usage.private_hugetlb << " "
+        << std::setw(8) << vma.usage.locked << " ";
+    // clang-format on
+    if (!verbose && !show_addr) {
+        out << std::setw(4) << count << " ";
+    }
+    if (verbose) {
+        if (total) {
+            out << "      ";
+        } else {
+            out << std::setw(5) << get_flags(vma, total) << " ";
+        }
+    }
+    out << get_vma_name(vma, total, is_bss) << "\n";
+}
+
+void VmaInfo::to_csv(bool total, std::ostream& out) const {
+    // clang-format off
+    out << vma.usage.vss
+        << "," << vma.usage.rss
+        << "," << vma.usage.pss
+        << "," << vma.usage.shared_clean
+        << "," << vma.usage.shared_dirty
+        << "," << vma.usage.private_clean
+        << "," << vma.usage.private_dirty
+        << "," << vma.usage.swap
+        << "," << vma.usage.swap_pss
+        << "," << vma.usage.anon_huge_pages
+        << "," << vma.usage.shmem_pmd_mapped
+        << "," << vma.usage.file_pmd_mapped
+        << "," << vma.usage.shared_hugetlb
+        << "," << vma.usage.private_hugetlb
+        << "," << vma.usage.locked;
+    // clang-format on
+    if (show_addr) {
+        out << ",";
+        if (total) {
+            out << ",";
+        } else {
+            out << std::hex << vma.start << "," << vma.end << std::dec;
+        }
+    }
+    if (!verbose && !show_addr) {
+        out << "," << count;
+    }
+    if (verbose) {
+        out << ",";
+        if (!total) {
+            out << EscapeCsvString(get_flags(vma, total));
+        }
+    }
+    out << "," << EscapeCsvString(get_vma_name(vma, total, is_bss)) << "\n";
+}
+
+void VmaInfo::to_json(bool total, std::ostream& out) const {
+    // clang-format off
+    out << "{\"virtual size\":" << vma.usage.vss
+        << ",\"RSS\":" << vma.usage.rss
+        << ",\"PSS\":" << vma.usage.pss
+        << ",\"shared clean\":" << vma.usage.shared_clean
+        << ",\"shared dirty\":" << vma.usage.shared_dirty
+        << ",\"private clean\":" << vma.usage.private_clean
+        << ",\"private dirty\":" << vma.usage.private_dirty
+        << ",\"swap\":" << vma.usage.swap
+        << ",\"swapPSS\":" << vma.usage.swap_pss
+        << ",\"Anon HugePages\":" << vma.usage.anon_huge_pages
+        << ",\"Shmem PmdMapped\":" << vma.usage.shmem_pmd_mapped
+        << ",\"File PmdMapped\":" << vma.usage.file_pmd_mapped
+        << ",\"Shared Hugetlb\":" << vma.usage.shared_hugetlb
+        << ",\"Private Hugetlb\":" << vma.usage.private_hugetlb
+        << ",\"Locked\":" << vma.usage.locked;
+    // clang-format on
+    if (show_addr) {
+        if (total) {
+            out << ",\"start addr\":\"\",\"end addr\":\"\"";
+        } else {
+            out << ",\"start addr\":\"" << std::hex << vma.start << "\",\"end addr\":\"" << vma.end
+                << "\"" << std::dec;
+        }
+    }
+    if (!verbose && !show_addr) {
+        out << ",\"#\":" << count;
+    }
+    if (verbose) {
+        out << ",\"flags\":" << EscapeJsonString(get_flags(vma, total));
+    }
+    out << ",\"object\":" << EscapeJsonString(get_vma_name(vma, total, is_bss)) << "}";
+}
+
+static bool is_library(const std::string& name) {
+    return (name.size() > 4) && (name[0] == '/') && ::android::base::EndsWith(name, ".so");
+}
+
+static void infer_vma_name(VmaInfo& current, const VmaInfo& recent) {
+    if (current.vma.name.empty()) {
+        if (recent.vma.end == current.vma.start && is_library(recent.vma.name)) {
+            current.vma.name = recent.vma.name;
+            current.is_bss = true;
+        } else {
+            current.vma.name = "[anon]";
+        }
+    }
+}
+
+static void add_mem_usage(MemUsage* to, const MemUsage& from) {
+    to->vss += from.vss;
+    to->rss += from.rss;
+    to->pss += from.pss;
+
+    to->swap += from.swap;
+    to->swap_pss += from.swap_pss;
+
+    to->private_clean += from.private_clean;
+    to->private_dirty += from.private_dirty;
+    to->shared_clean += from.shared_clean;
+    to->shared_dirty += from.shared_dirty;
+
+    to->anon_huge_pages += from.anon_huge_pages;
+    to->shmem_pmd_mapped += from.shmem_pmd_mapped;
+    to->file_pmd_mapped += from.file_pmd_mapped;
+    to->shared_hugetlb += from.shared_hugetlb;
+    to->private_hugetlb += from.private_hugetlb;
+}
+
+// A multimap is used instead of a map to allow for duplicate keys in case verbose output is used.
+static std::multimap<std::string, VmaInfo> vmas;
+
+static void collect_vma(const Vma& vma) {
+    static VmaInfo recent;
+    VmaInfo current(vma);
+
+    std::string key;
+    if (show_addr) {
+        // vma.end is included in case vma.start is identical for two VMAs.
+        key = StringPrintf("%16" PRIx64 "%16" PRIx64, vma.start, vma.end);
+    } else {
+        key = vma.name;
+    }
+
+    if (vmas.empty()) {
+        vmas.emplace(key, current);
+        recent = current;
+        return;
+    }
+
+    infer_vma_name(current, recent);
+    recent = current;
+
+    // If sorting by address, the VMA can be placed into the map as-is.
+    if (show_addr) {
+        vmas.emplace(key, current);
+        return;
+    }
+
+    // infer_vma_name() may have changed current.vma.name, so this key needs to be set again before
+    // using it to sort by name. For verbose output, the VMA can immediately be placed into the map.
+    key = current.vma.name;
+    if (verbose) {
+        vmas.emplace(key, current);
+        return;
+    }
+
+    // Coalesces VMAs' usage by name, if !show_addr && !verbose.
+    auto iter = vmas.find(key);
+    if (iter == vmas.end()) {
+        vmas.emplace(key, current);
+        return;
+    }
+
+    VmaInfo& match = iter->second;
+    add_mem_usage(&match.vma.usage, current.vma.usage);
+    match.is_bss &= current.is_bss;
+}
+
+static void print_text_header(std::ostream& out) {
+    if (show_addr) {
+        out << "           start              end ";
+    }
+    out << " virtual                     shared   shared  private  private                   "
+           "Anon      Shmem     File      Shared   Private\n";
+    if (show_addr) {
+        out << "            addr             addr ";
+    }
+    out << "    size      RSS      PSS    clean    dirty    clean    dirty     swap  swapPSS "
+           "HugePages PmdMapped PmdMapped Hugetlb  Hugetlb    Locked ";
+    if (!verbose && !show_addr) {
+        out << "   # ";
+    }
+    if (verbose) {
+        out << "flags ";
+    }
+    out << "object\n";
+}
+
+static void print_text_divider(std::ostream& out) {
+    if (show_addr) {
+        out << "---------------- ---------------- ";
+    }
+    out << "-------- -------- -------- -------- -------- -------- -------- -------- -------- "
+           "--------- --------- --------- -------- -------- -------- ";
+    if (!verbose && !show_addr) {
+        out << "---- ";
+    }
+    if (verbose) {
+        out << "----- ";
+    }
+    out << "------------------------------\n";
+}
+
+static void print_csv_header(std::ostream& out) {
+    out << "\"virtual size\",\"RSS\",\"PSS\",\"shared clean\",\"shared dirty\",\"private clean\","
+           "\"private dirty\",\"swap\",\"swapPSS\",\"Anon HugePages\",\"Shmem PmdMapped\","
+           "\"File PmdMapped\",\"Shared Hugetlb\",\"Private Hugetlb\",\"Locked\"";
+    if (show_addr) {
+        out << ",\"start addr\",\"end addr\"";
+    }
+    if (!verbose && !show_addr) {
+        out << ",\"#\"";
+    }
+    if (verbose) {
+        out << ",\"flags\"";
+    }
+    out << ",\"object\"\n";
+}
+
+static void print_header(Format format, std::ostream& out) {
+    switch (format) {
+        case Format::RAW:
+            print_text_header(out);
+            print_text_divider(out);
+            break;
+        case Format::CSV:
+            print_csv_header(out);
+            break;
+        case Format::JSON:
+            out << "[";
+            break;
+        default:
+            break;
+    }
+}
+
+static void print_vmainfo(const VmaInfo& v, Format format, std::ostream& out) {
+    switch (format) {
+        case Format::RAW:
+            v.to_raw(false, out);
+            break;
+        case Format::CSV:
+            v.to_csv(false, out);
+            break;
+        case Format::JSON:
+            v.to_json(false, out);
+            out << ",";
+            break;
+        default:
+            break;
+    }
+}
+
+static void print_vmainfo_totals(const VmaInfo& total_usage, Format format, std::ostream& out) {
+    switch (format) {
+        case Format::RAW:
+            print_text_divider(out);
+            print_text_header(out);
+            print_text_divider(out);
+            total_usage.to_raw(true, out);
+            break;
+        case Format::CSV:
+            total_usage.to_csv(true, out);
+            break;
+        case Format::JSON:
+            total_usage.to_json(true, out);
+            out << "]\n";
+            break;
+        default:
+            break;
+    }
+}
+
+}  // namespace showmap
+
+bool run_showmap(pid_t pid, const std::string& filename, bool terse, bool verbose, bool show_addr,
+                 bool quiet, Format format, std::ostream& out, std::ostream& err) {
+    showmap::show_addr = show_addr;
+    showmap::verbose = verbose;
+
+    bool success;
+    if (!filename.empty()) {
+        success = ::android::meminfo::ForEachVmaFromFile(filename, showmap::collect_vma);
+    } else {
+        ProcessRecord proc(pid, false, 0, 0, false, false, err);
+        success = proc.ForEachExistingVma(showmap::collect_vma);
+    }
+
+    if (!success) {
+        if (!quiet) {
+            if (!filename.empty()) {
+                err << "Failed to parse file " << filename << "\n";
+            } else {
+                err << "No maps for pid " << pid << "\n";
+            }
+        }
+        return false;
+    }
+
+    showmap::print_header(format, out);
+
+    showmap::VmaInfo total_usage;
+    for (const auto& entry : showmap::vmas) {
+        const showmap::VmaInfo& v = entry.second;
+        showmap::add_mem_usage(&total_usage.vma.usage, v.vma.usage);
+        total_usage.count += v.count;
+        if (terse && !(v.vma.usage.private_dirty || v.vma.usage.private_clean)) {
+            continue;
+        }
+        showmap::print_vmainfo(v, format, out);
+    }
+    showmap::print_vmainfo_totals(total_usage, format, out);
 
     return true;
 }
