@@ -113,6 +113,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "Invalid process id " << argv[optind] << "\n";
             usage(EXIT_FAILURE);
         }
+        // run_showmap will read directly from this file and ignore the pid argument.
+        filename = ::android::base::StringPrintf("/proc/%d/smaps", pid);
     }
 
     std::stringstream out;
