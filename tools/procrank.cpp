@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include <iostream>
+#include <map>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,7 @@
 #include <meminfo/procmeminfo.h>
 #include <procinfo/process.h>
 
+#include <processrecord.h>
 #include <smapinfo.h>
 
 using ::android::smapinfo::SortOrder;
@@ -187,8 +189,9 @@ int main(int argc, char* argv[]) {
 
     std::stringstream out;
     std::stringstream err;
-    bool success = ::android::smapinfo::run_procrank(pgflags, pgflags_mask, pids, get_oomadj,
-                                                     get_wss, sort_order, reverse_sort, out, err);
+    bool success =
+            ::android::smapinfo::run_procrank(pgflags, pgflags_mask, pids, get_oomadj, get_wss,
+                                              sort_order, reverse_sort, nullptr, out, err);
     std::cout << out.str();
     std::cerr << err.str();
     if (!success) {

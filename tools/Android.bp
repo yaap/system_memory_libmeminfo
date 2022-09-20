@@ -96,3 +96,18 @@ cc_binary {
         "libmeminfo",
     ],
 }
+
+cc_binary {
+    name: "bugreport_procdump",
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    srcs: ["bugreport_procdump.cpp"],
+    shared_libs: [
+        "libbase",
+        "libmeminfo",
+        "libsmapinfo",
+    ],
+}
