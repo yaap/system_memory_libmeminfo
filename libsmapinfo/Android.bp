@@ -36,7 +36,8 @@ cc_library_shared {
     host_supported: true,
     defaults: ["smapinfo_defaults"],
     export_include_dirs: ["include"],
-    srcs: ["smapinfo.cpp"],
+    srcs: ["processrecord.cpp",
+           "smapinfo.cpp"],
     target: {
         darwin: {
             enabled: false,
