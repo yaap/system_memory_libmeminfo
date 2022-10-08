@@ -22,6 +22,7 @@
 #include <sys/types.h>
 
 #include <iostream>
+#include <map>
 #include <memory>
 #include <set>
 
@@ -29,6 +30,7 @@
 #include <android-base/strings.h>
 #include <meminfo/procmeminfo.h>
 
+#include <processrecord.h>
 #include <smapinfo.h>
 
 using ::android::meminfo::Format;
@@ -165,7 +167,7 @@ int main(int argc, char* argv[]) {
     std::stringstream err;
     bool success = ::android::smapinfo::run_librank(pgflags, pgflags_mask, pids, lib_prefix,
                                                     all_libs, excluded_libs, mapflags_mask, format,
-                                                    sort_order, reverse_sort, out, err);
+                                                    sort_order, reverse_sort, nullptr, out, err);
     std::cout << out.str();
     std::cerr << err.str();
     if (!success) {
