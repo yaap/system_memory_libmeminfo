@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <set>
@@ -138,12 +139,26 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_sort(struc
 
 static bool populate_procs(struct params* params, uint64_t pgflags, uint64_t pgflags_mask,
                            std::vector<uint16_t>& swap_offset_array, const std::set<pid_t>& pids,
-                           std::vector<ProcessRecord>* procs, std::ostream& err) {
+                           std::vector<ProcessRecord>* procs,
+                           std::map<pid_t, ProcessRecord>* processrecords_ptr, std::ostream& err) {
+    // Fall back to using an empty map of ProcessRecords if nullptr was passed in.
+    std::map<pid_t, ProcessRecord> processrecords;
+    if (!processrecords_ptr) {
+        processrecords_ptr = &processrecords;
+    }
     // Mark each swap offset used by the process as we find them for calculating
     // proportional swap usage later.
     for (pid_t pid : pids) {
-        ProcessRecord proc(pid, params->show_wss, pgflags, pgflags_mask, true, params->show_oomadj,
-                           err);
+        // Check if a ProcessRecord already exists for this pid, create one if one does not exist.
+        auto iter = processrecords_ptr->find(pid);
+        ProcessRecord& proc =
+                (iter != processrecords_ptr->end())
+                        ? iter->second
+                        : processrecords_ptr
+                                  ->emplace(pid, ProcessRecord(pid, params->show_wss, pgflags,
+                                                               pgflags_mask, true,
+                                                               params->show_oomadj, err))
+                                  .first->second;
 
         if (!proc.valid()) {
             // Check to see if the process is still around, skip the process if the proc
@@ -170,7 +185,7 @@ static bool populate_procs(struct params* params, uint64_t pgflags, uint64_t pgf
             return false;
         }
 
-        procs->emplace_back(std::move(proc));
+        procs->push_back(proc);
     }
     return true;
 }
@@ -302,7 +317,8 @@ static void add_to_totals(struct params* params, ProcessRecord& proc,
 
 bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
                   bool get_oomadj, bool get_wss, SortOrder sort_order, bool reverse_sort,
-                  std::ostream& out, std::ostream& err) {
+                  std::map<pid_t, ProcessRecord>* processrecords_ptr, std::ostream& out,
+                  std::ostream& err) {
     ::android::meminfo::SysMemInfo smi;
     if (!smi.ReadMemInfo()) {
         err << "Failed to get system memory info\n";
@@ -338,7 +354,7 @@ bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>
 
     std::vector<ProcessRecord> procs;
     if (!procrank::populate_procs(&params, pgflags, pgflags_mask, swap_offset_array, pids, &procs,
-                                  err)) {
+                                  processrecords_ptr, err)) {
         return false;
     }
 
@@ -490,9 +506,24 @@ struct params {
 
 static bool populate_libs(struct params* params, uint64_t pgflags, uint64_t pgflags_mask,
                           const std::set<pid_t>& pids,
-                          std::map<std::string, LibRecord>& lib_name_map, std::ostream& err) {
+                          std::map<std::string, LibRecord>& lib_name_map,
+                          std::map<pid_t, ProcessRecord>* processrecords_ptr, std::ostream& err) {
+    // Fall back to using an empty map of ProcessRecords if nullptr was passed in.
+    std::map<pid_t, ProcessRecord> processrecords;
+    if (!processrecords_ptr) {
+        processrecords_ptr = &processrecords;
+    }
     for (pid_t pid : pids) {
-        ProcessRecord proc(pid, false, pgflags, pgflags_mask, true, params->show_oomadj, err);
+        // Check if a ProcessRecord already exists for this pid, create one if one does not exist.
+        auto iter = processrecords_ptr->find(pid);
+        ProcessRecord& proc =
+                (iter != processrecords_ptr->end())
+                        ? iter->second
+                        : processrecords_ptr
+                                  ->emplace(pid, ProcessRecord(pid, false, pgflags, pgflags_mask,
+                                                               true, params->show_oomadj, err))
+                                  .first->second;
+
         if (!proc.valid()) {
             err << "error: failed to create process record for: " << pid << "\n";
             return false;
@@ -680,7 +711,8 @@ static void print_procs(struct params* params, const LibRecord& lib,
 bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>& pids,
                  const std::string& lib_prefix, bool all_libs,
                  const std::vector<std::string>& excluded_libs, uint16_t mapflags_mask,
-                 Format format, SortOrder sort_order, bool reverse_sort, std::ostream& out,
+                 Format format, SortOrder sort_order, bool reverse_sort,
+                 std::map<pid_t, ProcessRecord>* processrecords_ptr, std::ostream& out,
                  std::ostream& err) {
     struct librank::params params = {
             .lib_prefix = lib_prefix,
@@ -694,7 +726,8 @@ bool run_librank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>&
 
     // Fills in usage info for each LibRecord.
     std::map<std::string, librank::LibRecord> lib_name_map;
-    if (!librank::populate_libs(&params, pgflags, pgflags_mask, pids, lib_name_map, err)) {
+    if (!librank::populate_libs(&params, pgflags, pgflags_mask, pids, lib_name_map,
+                                processrecords_ptr, err)) {
         return false;
     }
 
@@ -1083,15 +1116,29 @@ static void print_vmainfo_totals(const VmaInfo& total_usage, Format format, std:
 }  // namespace showmap
 
 bool run_showmap(pid_t pid, const std::string& filename, bool terse, bool verbose, bool show_addr,
-                 bool quiet, Format format, std::ostream& out, std::ostream& err) {
+                 bool quiet, Format format, std::map<pid_t, ProcessRecord>* processrecords_ptr,
+                 std::ostream& out, std::ostream& err) {
+    // Accumulated vmas are cleared to account for sequential showmap calls by bugreport_procdump.
+    showmap::vmas.clear();
+
     showmap::show_addr = show_addr;
     showmap::verbose = verbose;
 
     bool success;
     if (!filename.empty()) {
         success = ::android::meminfo::ForEachVmaFromFile(filename, showmap::collect_vma);
-    } else {
+    } else if (!processrecords_ptr) {
         ProcessRecord proc(pid, false, 0, 0, false, false, err);
+        success = proc.ForEachExistingVma(showmap::collect_vma);
+    } else {
+        // Check if a ProcessRecord already exists for this pid, create one if one does not exist.
+        auto iter = processrecords_ptr->find(pid);
+        ProcessRecord& proc =
+                (iter != processrecords_ptr->end())
+                        ? iter->second
+                        : processrecords_ptr
+                                  ->emplace(pid, ProcessRecord(pid, false, 0, 0, false, false, err))
+                                  .first->second;
         success = proc.ForEachExistingVma(showmap::collect_vma);
     }
 
@@ -1119,6 +1166,106 @@ bool run_showmap(pid_t pid, const std::string& filename, bool terse, bool verbos
         showmap::print_vmainfo(v, format, out);
     }
     showmap::print_vmainfo_totals(total_usage, format, out);
+
+    return true;
+}
+
+namespace bugreport_procdump {
+
+static void create_processrecords(const std::set<pid_t>& pids,
+                                  std::map<pid_t, ProcessRecord>& processrecords,
+                                  std::ostream& err) {
+    for (pid_t pid : pids) {
+        ProcessRecord proc(pid, false, 0, 0, true, false, err);
+        if (!proc.valid()) {
+            err << "Could not create a ProcessRecord for pid " << pid << "\n";
+            continue;
+        }
+        processrecords.emplace(pid, std::move(proc));
+    }
+}
+
+static void print_section_start(const std::string& name, std::ostream& out) {
+    out << "------ " << name << " ------\n";
+}
+
+static void print_section_end(const std::string& name,
+                              const std::chrono::time_point<std::chrono::steady_clock>& start,
+                              std::ostream& out) {
+    // std::ratio<1> represents the period for one second.
+    using floatsecs = std::chrono::duration<float, std::ratio<1>>;
+    auto end = std::chrono::steady_clock::now();
+    std::streamsize precision = out.precision();
+    out << "------ " << std::setprecision(3) << std::fixed << floatsecs(end - start).count()
+        << " was the duration of '" << name << "' ------\n";
+    out << std::setprecision(precision) << std::defaultfloat;
+}
+
+static void call_smaps_of_all_processes(const std::string& filename, bool terse, bool verbose,
+                                        bool show_addr, bool quiet, Format format,
+                                        std::map<pid_t, ProcessRecord>& processrecords,
+                                        std::ostream& out, std::ostream& err) {
+    for (const auto& [pid, record] : processrecords) {
+        std::string showmap_title = StringPrintf("SHOW MAP %d: %s", pid, record.cmdline().c_str());
+
+        auto showmap_start = std::chrono::steady_clock::now();
+        print_section_start(showmap_title, out);
+        run_showmap(pid, filename, terse, verbose, show_addr, quiet, format, &processrecords, out,
+                    err);
+        print_section_end(showmap_title, showmap_start, out);
+    }
+}
+
+static void call_librank(const std::set<pid_t>& pids,
+                         std::map<pid_t, ProcessRecord>& processrecords, std::ostream& out,
+                         std::ostream& err) {
+    auto librank_start = std::chrono::steady_clock::now();
+    print_section_start("LIBRANK", out);
+    run_librank(0, 0, pids, "", false, {"[heap]", "[stack]"}, 0, Format::RAW, SortOrder::BY_PSS,
+                false, &processrecords, out, err);
+    print_section_end("LIBRANK", librank_start, out);
+}
+
+static void call_procrank(const std::set<pid_t>& pids,
+                          std::map<pid_t, ProcessRecord>& processrecords, std::ostream& out,
+                          std::ostream& err) {
+    auto procrank_start = std::chrono::steady_clock::now();
+    print_section_start("PROCRANK", out);
+    run_procrank(0, 0, pids, false, false, SortOrder::BY_PSS, false, &processrecords, out, err);
+    print_section_end("PROCRANK", procrank_start, out);
+}
+
+}  // namespace bugreport_procdump
+
+bool run_bugreport_procdump(std::ostream& out, std::ostream& err) {
+    std::set<pid_t> pids;
+    if (!::android::smapinfo::get_all_pids(&pids)) {
+        err << "Failed to get all pids.\n";
+        return false;
+    }
+
+    // create_processrecords is the only expensive call in this function, as showmap, librank, and
+    // procrank will only print already-collected information. This duration is captured by
+    // dumpstate in the BUGREPORT PROCDUMP section.
+    std::map<pid_t, ProcessRecord> processrecords;
+    bugreport_procdump::create_processrecords(pids, processrecords, err);
+
+    // pids without associated ProcessRecords are removed so that librank/procrank do not fall back
+    // to creating new ProcessRecords for them.
+    for (pid_t pid : pids) {
+        if (processrecords.find(pid) == processrecords.end()) {
+            pids.erase(pid);
+        }
+    }
+
+    auto all_smaps_start = std::chrono::steady_clock::now();
+    bugreport_procdump::print_section_start("SMAPS OF ALL PROCESSES", out);
+    bugreport_procdump::call_smaps_of_all_processes("", false, false, false, true, Format::RAW,
+                                                    processrecords, out, err);
+    bugreport_procdump::print_section_end("SMAPS OF ALL PROCESSES", all_smaps_start, out);
+
+    bugreport_procdump::call_librank(pids, processrecords, out, err);
+    bugreport_procdump::call_procrank(pids, processrecords, out, err);
 
     return true;
 }
