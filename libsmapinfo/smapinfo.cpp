@@ -30,9 +30,9 @@
 #include <android-base/parseint.h>
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
-#include <meminfo/procmeminfo.h>
 #include <meminfo/sysmeminfo.h>
 
+#include <processrecord.h>
 #include <smapinfo.h>
 
 namespace android {
@@ -43,108 +43,7 @@ using ::android::meminfo::EscapeCsvString;
 using ::android::meminfo::EscapeJsonString;
 using ::android::meminfo::Format;
 using ::android::meminfo::MemUsage;
-using ::android::meminfo::ProcMemInfo;
 using ::android::meminfo::Vma;
-using ::android::meminfo::VmaCallback;
-
-struct ProcessRecord {
-  public:
-    ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t pgflags_mask,
-                  bool get_cmdline, bool get_oomadj, std::ostream& err)
-        : pid_(-1),
-          oomadj_(OOM_SCORE_ADJ_MAX + 1),
-          proportional_swap_(0),
-          unique_swap_(0),
-          zswap_(0) {
-        procmem_ = std::make_unique<ProcMemInfo>(pid, get_wss, pgflags, pgflags_mask);
-        if (procmem_ == nullptr) {
-            err << "Failed to create ProcMemInfo for: " << pid << "\n";
-            return;
-        }
-
-        // cmdline_ only needs to be populated if this record will be used by procrank/librank.
-        if (get_cmdline) {
-            std::string fname = StringPrintf("/proc/%d/cmdline", pid);
-            if (!::android::base::ReadFileToString(fname, &cmdline_)) {
-                std::cerr << "Failed to read cmdline from: " << fname << "\n";
-                cmdline_ = "<unknown>";
-            }
-            // We deliberately don't read the /proc/<pid>/cmdline file directly into 'cmdline_'
-            // because some processes have cmdlines that end with "0x00 0x0A 0x00",
-            // e.g. xtra-daemon, lowi-server.
-            // The .c_str() assignment takes care of trimming the cmdline at the first 0x00. This is
-            // how the original procrank worked (luckily).
-            cmdline_.resize(strlen(cmdline_.c_str()));
-        }
-
-        // oomadj_ only needs to be populated if this record will be used by procrank/librank.
-        if (get_oomadj) {
-            std::string fname = StringPrintf("/proc/%d/oom_score_adj", pid);
-            std::string oom_score;
-            if (!::android::base::ReadFileToString(fname, &oom_score)) {
-                std::cerr << "Failed to read oom_score_adj file: " << fname << "\n";
-                return;
-            }
-            if (!::android::base::ParseInt(::android::base::Trim(oom_score), &oomadj_)) {
-                std::cerr << "Failed to parse oomadj from: " << fname << "\n";
-                return;
-            }
-        }
-
-        // We want to use Smaps() to populate procmem_'s maps before calling Wss() or Usage(), as
-        // these will fall back on the slower ReadMaps().
-        procmem_->Smaps("", true);
-        usage_or_wss_ = get_wss ? procmem_->Wss() : procmem_->Usage();
-        swap_offsets_ = procmem_->SwapOffsets();
-        pid_ = pid;
-    }
-
-    bool valid() const { return pid_ != -1; }
-
-    void CalculateSwap(const std::vector<uint16_t>& swap_offset_array,
-                       float zram_compression_ratio) {
-        for (auto& off : swap_offsets_) {
-            proportional_swap_ += getpagesize() / swap_offset_array[off];
-            unique_swap_ += swap_offset_array[off] == 1 ? getpagesize() : 0;
-            zswap_ = proportional_swap_ * zram_compression_ratio;
-        }
-        // This is divided by 1024 to convert to KB.
-        proportional_swap_ /= 1024;
-        unique_swap_ /= 1024;
-        zswap_ /= 1024;
-    }
-
-    // Getters
-    pid_t pid() const { return pid_; }
-    const std::string& cmdline() const { return cmdline_; }
-    int32_t oomadj() const { return oomadj_; }
-    uint64_t proportional_swap() const { return proportional_swap_; }
-    uint64_t unique_swap() const { return unique_swap_; }
-    uint64_t zswap() const { return zswap_; }
-
-    // Wrappers to ProcMemInfo
-    const std::vector<uint64_t>& SwapOffsets() const { return swap_offsets_; }
-    // show_wss may be used to return differentiated output in the future.
-    const MemUsage& Usage([[maybe_unused]] bool show_wss) const { return usage_or_wss_; }
-
-    // This will not result in a second reading of the smaps file because procmem_->Smaps() has
-    // already been called in the constructor.
-    const std::vector<Vma>& Smaps() const { return procmem_->Smaps(); }
-    bool ForEachExistingVma(const VmaCallback& callback) {
-        return procmem_->ForEachExistingVma(callback);
-    }
-
-  private:
-    std::unique_ptr<ProcMemInfo> procmem_;
-    pid_t pid_;
-    std::string cmdline_;
-    int32_t oomadj_;
-    uint64_t proportional_swap_;
-    uint64_t unique_swap_;
-    uint64_t zswap_;
-    MemUsage usage_or_wss_;
-    std::vector<uint64_t> swap_offsets_;
-};
 
 bool get_all_pids(std::set<pid_t>* pids) {
     pids->clear();
