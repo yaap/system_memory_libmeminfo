@@ -60,6 +60,21 @@ ProcessRecord::ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t
         // The .c_str() assignment takes care of trimming the cmdline at the first 0x00. This is
         // how the original procrank worked (luckily).
         cmdline_.resize(strlen(cmdline_.c_str()));
+
+        // If there is no cmdline (empty, not <unknown>), a kernel thread will have comm. This only
+        // matters for bug reports, which output 'SHOW MAP <pid>: <cmdline>' as section titles.
+        if (cmdline_.empty()) {
+            fname = StringPrintf("/proc/%d/comm", pid);
+            if (!::android::base::ReadFileToString(fname, &cmdline_)) {
+                err << "Failed to read comm from: " << fname << "\n";
+            }
+            // comm seems to contain a trailing '\n' that isn't present in cmdline. dumpstate
+            // surrounds kernel thread names with brackets; this behavior is maintained here.
+            if (auto pos = cmdline_.find_last_of('\n'); pos != std::string::npos) {
+                cmdline_.erase(pos);
+            }
+            cmdline_ = StringPrintf("[%s]", cmdline_.c_str());
+        }
     }
 
     // oomadj_ only needs to be populated if this record will be used by procrank/librank.
