@@ -187,13 +187,9 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    std::stringstream out;
-    std::stringstream err;
-    bool success =
-            ::android::smapinfo::run_procrank(pgflags, pgflags_mask, pids, get_oomadj, get_wss,
-                                              sort_order, reverse_sort, nullptr, out, err);
-    std::cout << out.str();
-    std::cerr << err.str();
+    bool success = ::android::smapinfo::run_procrank(pgflags, pgflags_mask, pids, get_oomadj,
+                                                     get_wss, sort_order, reverse_sort, nullptr,
+                                                     std::cout, std::cerr);
     if (!success) {
         exit(EXIT_FAILURE);
     }

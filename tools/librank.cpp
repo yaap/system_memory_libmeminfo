@@ -163,13 +163,9 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    std::stringstream out;
-    std::stringstream err;
-    bool success = ::android::smapinfo::run_librank(pgflags, pgflags_mask, pids, lib_prefix,
-                                                    all_libs, excluded_libs, mapflags_mask, format,
-                                                    sort_order, reverse_sort, nullptr, out, err);
-    std::cout << out.str();
-    std::cerr << err.str();
+    bool success = ::android::smapinfo::run_librank(
+            pgflags, pgflags_mask, pids, lib_prefix, all_libs, excluded_libs, mapflags_mask, format,
+            sort_order, reverse_sort, nullptr, std::cout, std::cerr);
     if (!success) {
         exit(EXIT_FAILURE);
     }
