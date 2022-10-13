@@ -119,12 +119,8 @@ int main(int argc, char* argv[]) {
         filename = ::android::base::StringPrintf("/proc/%d/smaps", pid);
     }
 
-    std::stringstream out;
-    std::stringstream err;
     bool success = ::android::smapinfo::run_showmap(pid, filename, terse, verbose, show_addr, quiet,
-                                                    format, nullptr, out, err);
-    std::cout << out.str();
-    std::cerr << err.str();
+                                                    format, nullptr, std::cout, std::cerr);
     if (!success) {
         exit(EXIT_FAILURE);
     }
