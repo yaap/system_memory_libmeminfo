@@ -52,15 +52,24 @@ class SysMemInfo final {
     static constexpr const char kMemActive[] = "Active:";
     static constexpr const char kMemInactive[] = "Inactive:";
     static constexpr const char kMemUnevictable[] = "Unevictable:";
-
+    static constexpr const char kMemAvailable[] = "MemAvailable:";
+    static constexpr const char kMemActiveAnon[] = "Active(anon):";
+    static constexpr const char kMemInactiveAnon[] = "Inactive(anon):";
+    static constexpr const char kMemActiveFile[] = "Active(file):";
+    static constexpr const char kMemInactiveFile[] = "Inactive(file):";
+    static constexpr const char kMemCmaTotal[] = "CmaTotal:";
+    static constexpr const char kMemCmaFree[] = "CmaFree:";
 
     static constexpr std::initializer_list<std::string_view> kDefaultSysMemInfoTags = {
-            SysMemInfo::kMemTotal,      SysMemInfo::kMemFree,        SysMemInfo::kMemBuffers,
-            SysMemInfo::kMemCached,     SysMemInfo::kMemShmem,       SysMemInfo::kMemSlab,
-            SysMemInfo::kMemSReclaim,   SysMemInfo::kMemSUnreclaim,  SysMemInfo::kMemSwapTotal,
-            SysMemInfo::kMemSwapFree,   SysMemInfo::kMemMapped,      SysMemInfo::kMemVmallocUsed,
-            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack, SysMemInfo::kMemKReclaimable,
-            SysMemInfo::kMemActive,     SysMemInfo::kMemInactive,    SysMemInfo::kMemUnevictable,
+            SysMemInfo::kMemTotal,      SysMemInfo::kMemFree,         SysMemInfo::kMemBuffers,
+            SysMemInfo::kMemCached,     SysMemInfo::kMemShmem,        SysMemInfo::kMemSlab,
+            SysMemInfo::kMemSReclaim,   SysMemInfo::kMemSUnreclaim,   SysMemInfo::kMemSwapTotal,
+            SysMemInfo::kMemSwapFree,   SysMemInfo::kMemMapped,       SysMemInfo::kMemVmallocUsed,
+            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack,  SysMemInfo::kMemKReclaimable,
+            SysMemInfo::kMemActive,     SysMemInfo::kMemInactive,     SysMemInfo::kMemUnevictable,
+            SysMemInfo::kMemAvailable,  SysMemInfo::kMemActiveAnon,   SysMemInfo::kMemInactiveAnon,
+            SysMemInfo::kMemActiveFile, SysMemInfo::kMemInactiveFile, SysMemInfo::kMemCmaTotal,
+            SysMemInfo::kMemCmaFree,
     };
 
     SysMemInfo() = default;
@@ -96,6 +105,13 @@ class SysMemInfo final {
     uint64_t mem_active_kb() const { return find_mem_by_tag(kMemActive); }
     uint64_t mem_inactive_kb() const { return find_mem_by_tag(kMemInactive); }
     uint64_t mem_unevictable_kb() const { return find_mem_by_tag(kMemUnevictable); }
+    uint64_t mem_available_kb() const { return find_mem_by_tag(kMemAvailable); }
+    uint64_t mem_active_anon_kb() const { return find_mem_by_tag(kMemActiveAnon); }
+    uint64_t mem_inactive_anon_kb() const { return find_mem_by_tag(kMemInactiveAnon); }
+    uint64_t mem_active_file_kb() const { return find_mem_by_tag(kMemActiveFile); }
+    uint64_t mem_inactive_file_kb() const { return find_mem_by_tag(kMemInactiveFile); }
+    uint64_t mem_cma_total_kb() const { return find_mem_by_tag(kMemCmaTotal); }
+    uint64_t mem_cma_free_kb() const { return find_mem_by_tag(kMemCmaFree); }
     uint64_t mem_zram_kb(const char* zram_dev = nullptr) const;
     uint64_t mem_compacted_kb(const char* zram_dev = nullptr);
 
