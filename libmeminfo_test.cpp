@@ -951,6 +951,13 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mi.mem_active_kb(), 445856);
     EXPECT_EQ(mi.mem_inactive_kb(), 459092);
     EXPECT_EQ(mi.mem_unevictable_kb(), 3096);
+    EXPECT_EQ(mi.mem_available_kb(), 2546560);
+    EXPECT_EQ(mi.mem_active_anon_kb(), 78492);
+    EXPECT_EQ(mi.mem_inactive_anon_kb(), 2240);
+    EXPECT_EQ(mi.mem_active_file_kb(), 367364);
+    EXPECT_EQ(mi.mem_inactive_file_kb(), 456852);
+    EXPECT_EQ(mi.mem_cma_total_kb(), 131072);
+    EXPECT_EQ(mi.mem_cma_free_kb(), 130380);
 }
 
 TEST(SysMemInfo, TestEmptyFile) {
@@ -995,6 +1002,13 @@ enum {
     MEMINFO_ACTIVE,
     MEMINFO_INACTIVE,
     MEMINFO_UNEVICTABLE,
+    MEMINFO_AVAILABLE,
+    MEMINFO_ACTIVE_ANON,
+    MEMINFO_INACTIVE_ANON,
+    MEMINFO_ACTIVE_FILE,
+    MEMINFO_INACTIVE_FILE,
+    MEMINFO_CMA_TOTAL,
+    MEMINFO_CMA_FREE,
     MEMINFO_COUNT
 };
 
@@ -1077,6 +1091,13 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mem[MEMINFO_ACTIVE], 445856);
     EXPECT_EQ(mem[MEMINFO_INACTIVE], 459092);
     EXPECT_EQ(mem[MEMINFO_UNEVICTABLE], 3096);
+    EXPECT_EQ(mem[MEMINFO_AVAILABLE], 2546560);
+    EXPECT_EQ(mem[MEMINFO_ACTIVE_ANON], 78492);
+    EXPECT_EQ(mem[MEMINFO_INACTIVE_ANON], 2240);
+    EXPECT_EQ(mem[MEMINFO_ACTIVE_FILE], 367364);
+    EXPECT_EQ(mem[MEMINFO_INACTIVE_FILE], 456852);
+    EXPECT_EQ(mem[MEMINFO_CMA_TOTAL], 131072);
+    EXPECT_EQ(mem[MEMINFO_CMA_FREE], 130380);
 }
 
 TEST(SysMemInfo, TestVmallocInfoNoMemory) {
