@@ -191,45 +191,6 @@ bool fd_sharer::sendfd(int fd) {
         EXPECT_EQ((_ref != _maprefs.end()), _expect);                        \
     } while (0)
 
-TEST(DmaBufInfoParser, TestReadDmaBufInfo) {
-    std::string bufinfo = R"bufinfo(00045056    00000002    00000007    00000002    ion 00022069    
-	Attached Devices:
-Total 0 devices attached
-01048576    00000002    00000007    00000001    ion 00019834    CAMERA
-	Attached Devices:
-	soc:qcom,cam_smmu:msm_cam_smmu_icp
-Total 1 devices attached)bufinfo";
-
-    TemporaryFile tf;
-    ASSERT_TRUE(tf.fd != -1);
-    ASSERT_TRUE(::android::base::WriteStringToFd(bufinfo, tf.fd));
-    std::string path = std::string(tf.path);
-
-    std::vector<DmaBuffer> dmabufs;
-    EXPECT_TRUE(ReadDmaBufInfo(&dmabufs, path));
-
-    EXPECT_EQ(dmabufs.size(), 2UL);
-
-    EXPECT_EQ(dmabufs[0].size(), 45056UL);
-    EXPECT_EQ(dmabufs[0].inode(), 22069UL);
-    EXPECT_EQ(dmabufs[0].count(), 2UL);
-    EXPECT_EQ(dmabufs[0].exporter(), "ion");
-    EXPECT_TRUE(dmabufs[0].name().empty());
-    EXPECT_EQ(dmabufs[0].total_refs(), 0ULL);
-    EXPECT_TRUE(dmabufs[0].fdrefs().empty());
-    EXPECT_TRUE(dmabufs[0].maprefs().empty());
-
-    EXPECT_EQ(dmabufs[1].size(), 1048576UL);
-    EXPECT_EQ(dmabufs[1].inode(), 19834UL);
-    EXPECT_EQ(dmabufs[1].count(), 1UL);
-    EXPECT_EQ(dmabufs[1].exporter(), "ion");
-    EXPECT_FALSE(dmabufs[1].name().empty());
-    EXPECT_EQ(dmabufs[1].name(), "CAMERA");
-    EXPECT_EQ(dmabufs[1].total_refs(), 0ULL);
-    EXPECT_TRUE(dmabufs[1].fdrefs().empty());
-    EXPECT_TRUE(dmabufs[1].maprefs().empty());
-}
-
 class DmaBufSysfsStatsParser : public ::testing::Test {
   public:
     virtual void SetUp() {

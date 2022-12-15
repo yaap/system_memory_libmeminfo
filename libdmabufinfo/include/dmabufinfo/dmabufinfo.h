@@ -88,13 +88,6 @@ struct DmaBuffer {
     }
 };
 
-// Read and return current dma buf objects from
-// DEBUGFS/dma_buf/bufinfo. The references to each dma buffer are not
-// populated here and will return an empty vector.
-// Returns false if something went wrong with the function, true otherwise.
-bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs,
-                    const std::string& path = "/sys/kernel/debug/dma_buf/bufinfo");
-
 // Read and return dmabuf objects for a given process without the help
 // of DEBUGFS
 // Returns false if something went wrong with the function, true otherwise.
