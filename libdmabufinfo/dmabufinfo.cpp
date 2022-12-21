@@ -256,37 +256,6 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
     return true;
 }
 
-bool ReadDmaBufInfo(std::vector<DmaBuffer>* dmabufs, const std::string& path) {
-    std::ifstream fp(path);
-    if (!fp) {
-        LOG(ERROR) << "Failed to open " << path << " from debugfs";
-        return false;
-    }
-
-    dmabufs->clear();
-    for (std::string line; getline(fp, line);) {
-        // The new dmabuf bufinfo format adds inode number and a name at the end
-        // We are looking for lines as follows:
-        // size     flags       mode        count  exp_name ino         name
-        // 01048576 00000002    00000007    00000001    ion 00018758    CAMERA
-        // 01048576 00000002    00000007    00000001    ion 00018758
-        uint64_t size, count, inode;
-        char* exporter_name = nullptr;
-        char* name = nullptr;
-        int matched = sscanf(line.c_str(), "%" SCNu64 "%*x %*x %" SCNu64 " %ms %" SCNu64 " %ms",
-                             &size, &count, &exporter_name, &inode, &name);
-        if (matched >= 4) {
-            dmabufs->emplace_back((ino_t)inode, size, count, exporter_name,
-                                  matched > 4 ? name : "");
-        }
-
-        free(exporter_name);
-        free(name);
-    }
-
-    return true;
-}
-
 bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs,
                     const std::string& procfs_path, const std::string& dmabuf_sysfs_path) {
     dmabufs->clear();
