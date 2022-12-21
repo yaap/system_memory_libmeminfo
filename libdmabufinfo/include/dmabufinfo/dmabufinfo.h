@@ -130,7 +130,7 @@ bool ReadDmaBufPss(int pid, uint64_t* pss, const std::string& procfs_path = "/pr
 // Writes DmaBuffer info into an existing vector (which will be cleared first.)
 // Will include all DmaBuffers, whether thay are retained or mapped.
 // Returns true on success, otherwise false.
-bool ReadDmaBufs(std::vector<DmaBuffer>* bufs);
+bool ReadProcfsDmaBufs(std::vector<DmaBuffer>* bufs);
 
 }  // namespace dmabufinfo
 }  // namespace android
