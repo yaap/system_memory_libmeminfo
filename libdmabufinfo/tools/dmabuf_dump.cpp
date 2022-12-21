@@ -260,8 +260,8 @@ int main(int argc, char* argv[]) {
             exit(EXIT_FAILURE);
         }
     } else {
-        if (!ReadDmaBufs(&bufs)) {
-            fprintf(stderr, "Failed to ReadDmaBufs, check logcat for info\n");
+        if (!ReadProcfsDmaBufs(&bufs)) {
+            fprintf(stderr, "Failed to ReadProcfsDmaBufs, check logcat for info\n");
             exit(EXIT_FAILURE);
         }
     }
