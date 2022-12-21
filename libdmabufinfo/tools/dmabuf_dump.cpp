@@ -135,16 +135,12 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
 
     // Create a reverse map from pid to dmabufs
     std::unordered_map<pid_t, std::set<ino_t>> pid_to_inodes = {};
-    uint64_t total_size = 0;  // Total size of dmabufs in the system
-    uint64_t kernel_rss = 0;  // Total size of dmabufs NOT mapped or opened by a process
+    uint64_t userspace_size = 0;  // Size of userspace dmabufs in the system
     for (auto& buf : bufs) {
         for (auto pid : buf.pids()) {
             pid_to_inodes[pid].insert(buf.inode());
         }
-        total_size += buf.size();
-        if (buf.fdrefs().empty() && buf.maprefs().empty()) {
-            kernel_rss += buf.size();
-        }
+        userspace_size += buf.size();
     }
     // Create an inode to dmabuf map. We know inodes are unique..
     std::unordered_map<ino_t, DmaBuffer> inode_to_dmabuf;
@@ -173,9 +169,19 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
         total_rss += rss;
         total_pss += pss;
     }
+
+    uint64_t kernel_rss = 0;  // Total size of dmabufs NOT mapped or opened by a process
+    if (android::dmabufinfo::GetDmabufTotalExportedKb(&kernel_rss)) {
+        kernel_rss *= 1024;  // KiB -> bytes
+        if (kernel_rss > userspace_size)
+            kernel_rss -= userspace_size;
+        else
+            printf("Warning: Total dmabufs < userspace dmabufs\n");
+    }
     printf("dmabuf total: %" PRIu64 " kB kernel_rss: %" PRIu64 " kB userspace_rss: %" PRIu64
            " kB userspace_pss: %" PRIu64 " kB\n ",
-           total_size / 1024, kernel_rss / 1024, total_rss / 1024, total_pss / 1024);
+           (userspace_size + kernel_rss) / 1024, kernel_rss / 1024, total_rss / 1024,
+           total_pss / 1024);
 }
 
 static void DumpDmabufSysfsStats() {
