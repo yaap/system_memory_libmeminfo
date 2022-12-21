@@ -305,7 +305,7 @@ bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs
     return true;
 }
 
-bool ReadDmaBufs(std::vector<DmaBuffer>* bufs) {
+bool ReadProcfsDmaBufs(std::vector<DmaBuffer>* bufs) {
     bufs->clear();
 
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir("/proc"), closedir);
