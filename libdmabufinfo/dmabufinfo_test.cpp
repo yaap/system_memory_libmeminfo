@@ -21,6 +21,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -451,6 +452,13 @@ class DmaBufTester : public ::testing::Test {
 
     bool is_valid() { return (ion_fd >= 0 && ion_heap_mask > 0); }
 
+    bool is_using_dmabuf_heaps() {
+        // We can verify that a device is running on dmabuf-heaps by checking that
+        // the `dev/ion` is missing, while `dev/dma_heap` is present.
+        // https://source.android.com/docs/core/architecture/kernel/dma-buf-heaps
+        return !fs::is_directory("/dev/ion") && fs::is_directory("/dev/dma_heap");
+    }
+
     unique_fd allocate(uint64_t size, const std::string& name) {
         int fd;
         int err = ion_alloc_fd(ion_fd, size, 0, ion_heap_mask, 0, &fd);
@@ -531,6 +539,11 @@ class DmaBufTester : public ::testing::Test {
 TEST_F(DmaBufTester, TestFdRef) {
     // Test if a dma buffer is found while the corresponding file descriptor
     // is open
+
+    if (is_using_dmabuf_heaps()) {
+        GTEST_SKIP();
+    }
+
     ASSERT_TRUE(is_valid());
     pid_t pid = getpid();
     std::vector<DmaBuffer> dmabufs;
@@ -555,6 +568,11 @@ TEST_F(DmaBufTester, TestFdRef) {
 TEST_F(DmaBufTester, TestMapRef) {
     // Test to make sure we can find a buffer if the fd is closed but the buffer
     // is mapped
+
+    if (is_using_dmabuf_heaps()) {
+        GTEST_SKIP();
+    }
+
     ASSERT_TRUE(is_valid());
     pid_t pid = getpid();
     std::vector<DmaBuffer> dmabufs;
@@ -595,6 +613,10 @@ TEST_F(DmaBufTester, TestMapRef) {
 TEST_F(DmaBufTester, TestSharedfd) {
     // Each time a shared buffer is received over a socket, the remote process
     // will take an extra reference on it.
+
+    if (is_using_dmabuf_heaps()) {
+        GTEST_SKIP();
+    }
 
     ASSERT_TRUE(is_valid());
 
@@ -639,6 +661,10 @@ TEST_F(DmaBufTester, DupFdTest) {
     // dup()ing an fd will make this process take an extra reference on the
     // shared buffer.
 
+    if (is_using_dmabuf_heaps()) {
+        GTEST_SKIP();
+    }
+
     ASSERT_TRUE(is_valid());
 
     pid_t pid = getpid();
@@ -669,6 +695,11 @@ TEST_F(DmaBufTester, DupFdTest) {
 TEST_F(DmaBufTester, ForkTest) {
     // fork()ing a child will cause the child to automatically take a reference
     // on any existing shared buffers.
+
+    if (is_using_dmabuf_heaps()) {
+        GTEST_SKIP();
+    }
+
     ASSERT_TRUE(is_valid());
 
     pid_t pid = getpid();
