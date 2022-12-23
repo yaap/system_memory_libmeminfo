@@ -173,10 +173,12 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
     uint64_t kernel_rss = 0;  // Total size of dmabufs NOT mapped or opened by a process
     if (android::dmabufinfo::GetDmabufTotalExportedKb(&kernel_rss)) {
         kernel_rss *= 1024;  // KiB -> bytes
-        if (kernel_rss > userspace_size)
+        if (kernel_rss >= userspace_size)
             kernel_rss -= userspace_size;
         else
             printf("Warning: Total dmabufs < userspace dmabufs\n");
+    } else {
+        printf("Warning: Could not get total exported dmabufs. Kernel size will be 0.\n");
     }
     printf("dmabuf total: %" PRIu64 " kB kernel_rss: %" PRIu64 " kB userspace_rss: %" PRIu64
            " kB userspace_pss: %" PRIu64 " kB\n ",
