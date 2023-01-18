@@ -76,6 +76,10 @@ class ProcMemInfo final {
     // Returns false in case of failure during parsing.
     bool ForEachVmaFromMaps(const VmaCallback& callback);
 
+    // Similar to other VMA reading methods, except this one allows passing a reusable buffer
+    // to store the /proc/<pid>/maps content
+    bool ForEachVmaFromMaps(const VmaCallback& callback, std::string& mapsBuffer);
+
     // Takes the existing VMAs in 'maps_' and calls the callback() for each one
     // of them. This is intended to avoid parsing /proc/<pid>/maps or
     // /proc/<pid>/smaps twice.
