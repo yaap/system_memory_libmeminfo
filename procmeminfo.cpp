@@ -283,6 +283,26 @@ bool ProcMemInfo::ForEachVmaFromMaps(const VmaCallback& callback) {
     return success;
 }
 
+bool ProcMemInfo::ForEachVmaFromMaps(const VmaCallback& callback, std::string& mapsBuffer) {
+    Vma vma;
+    vma.name.reserve(256);
+    auto vmaCollect = [&callback,&vma](const uint64_t start, uint64_t end, uint16_t flags,
+                            uint64_t pgoff, ino_t inode, const char* name, bool shared) {
+        vma.start = start;
+        vma.end = end;
+        vma.flags = flags;
+        vma.offset = pgoff;
+        vma.name = name;
+        vma.inode = inode;
+        vma.is_shared = shared;
+        callback(vma);
+    };
+
+    bool success = ::android::procinfo::ReadProcessMaps(pid_, vmaCollect, mapsBuffer);
+
+    return success;
+}
+
 bool ProcMemInfo::SmapsOrRollup(MemUsage* stats) const {
     std::string path = ::android::base::StringPrintf(
             "/proc/%d/%s", pid_, IsSmapsRollupSupported() ? "smaps_rollup" : "smaps");
