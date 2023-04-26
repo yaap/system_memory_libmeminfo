@@ -93,7 +93,13 @@ ProcessRecord::ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t
 
     // We want to use Smaps() to populate procmem_'s maps before calling Wss() or Usage(), as
     // these will fall back on the slower ReadMaps().
-    procmem_.Smaps("", true);
+    //
+    // This Smaps() call is temporarily disabled because it results in
+    // procmem_'s swap_offsets_ not being populated, causing procrank to not
+    // report PSwap/USwap/ZSwap. Wss() and Usage() both fall back to ReadMaps(),
+    // which will populate swap_offsets_.
+    //
+    // procmem_.Smaps("", true);
     usage_or_wss_ = get_wss ? procmem_.Wss() : procmem_.Usage();
     swap_offsets_ = procmem_.SwapOffsets();
     pid_ = pid;
