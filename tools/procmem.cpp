@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
