@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <set>
