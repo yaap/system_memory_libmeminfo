@@ -957,6 +957,7 @@ static void add_mem_usage(MemUsage* to, const MemUsage& from) {
     to->file_pmd_mapped += from.file_pmd_mapped;
     to->shared_hugetlb += from.shared_hugetlb;
     to->private_hugetlb += from.private_hugetlb;
+    to->locked += from.locked;
 }
 
 // A multimap is used instead of a map to allow for duplicate keys in case verbose output is used.
