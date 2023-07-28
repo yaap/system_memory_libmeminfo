@@ -16,13 +16,12 @@
 
 #pragma once
 
+#include <libelf64/elf64.h>
+
 #include <fstream>
-#include <string>
 
-#include "elf64-binary.h"
-
-namespace lib {
-namespace elf {
+namespace android {
+namespace elf64 {
 
 // Class to parse ELF64 binaries.
 //
@@ -36,17 +35,17 @@ namespace elf {
 class Elf64Parser {
   public:
     // Parse the elf file and populate the elfBinary object.
-    static void ParseElfFile(std::string& fileName, Elf64Binary& elfBinary);
+    static bool ParseElfFile(const std::string& fileName, Elf64Binary& elfBinary);
 
   private:
-    static void OpenElfFile(std::string& fileName, std::ifstream& elfFile);
+    static bool OpenElfFile(const std::string& fileName, std::ifstream& elfFile);
     static void CloseElfFile(std::ifstream& elfFile);
-    static void ParseExecutableHeader(std::ifstream& elfFile, Elf64Binary& elfBinary);
-    static void ParseProgramHeaders(std::ifstream& elfFile, Elf64Binary& elfBinary);
-    static void ParseSections(std::ifstream& elfFile, Elf64Binary& elfBinary);
-    static void ParseSectionHeaders(std::ifstream& elfFile, Elf64Binary& elfBinary);
-    static void ParseStringTableSection(Elf64Binary& elfBinary, Elf64_Sc* sPtr);
+    static bool ParseExecutableHeader(std::ifstream& elfFile, Elf64Binary& elfBinary);
+    static bool IsElf64(Elf64Binary& elf64Binary);
+    static bool ParseProgramHeaders(std::ifstream& elfFile, Elf64Binary& elfBinary);
+    static bool ParseSections(std::ifstream& elfFile, Elf64Binary& elfBinary);
+    static bool ParseSectionHeaders(std::ifstream& elfFile, Elf64Binary& elfBinary);
 };
 
-}  // namespace elf
-}  // namespace lib
+}  // namespace elf64
+}  // namespace android

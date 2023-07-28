@@ -22,14 +22,14 @@
 
 using namespace std;
 
-namespace lib {
-namespace elf {
+namespace android {
+namespace elf64 {
 
 // Section content representation
 typedef struct {
-    uint8_t* data;   // Raw content of the data section.
+    std::vector<char> data;   // Raw content of the data section.
     uint64_t size;   // Size of the data section.
-    char* name;      // The name of the section.
+    std::string name;      // The name of the section.
     uint16_t index;  // Index of the section.
 } Elf64_Sc;
 
@@ -69,21 +69,12 @@ typedef struct {
 //   - https://elixir.bootlin.com/linux/v5.14.21/source/include/uapi/linux/elf.h#L222
 class Elf64Binary {
   public:
-    Elf64Binary();
-    ~Elf64Binary();
-    void PrintEhdr();
-    void PrintPhdrs();
-    void PrintShdrs();
-    void PrintSectionNames();
-    void PrintAll();
-
-  public:
     Elf64_Ehdr ehdr;
-    std::vector<Elf64_Phdr*> phdrs;
-    std::vector<Elf64_Shdr*> shdrs;
-    std::vector<Elf64_Sc*> sections;
-    std::vector<std::string*> sectionNames;
+    std::vector<Elf64_Phdr> phdrs;
+    std::vector<Elf64_Shdr> shdrs;
+    std::vector<Elf64_Sc> sections;
+    std::string path;
 };
 
-}  // namespace elf
-}  // namespace lib
+}  // namespace elf64
+}  // namespace android

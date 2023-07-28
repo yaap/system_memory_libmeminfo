@@ -11,53 +11,28 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+ * limitations under the License. */
 
-#include "elf64-parser.h"
+#include <libelf64/parse.h>
 
 #include <elf.h>
-#include <stdlib.h>
-#include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
 
-#include "elf64-binary.h"
+#include <fstream>
 
 using namespace std;
 
-namespace lib {
-namespace elf {
+namespace android {
+namespace elf64 {
 
-// Parse the elf file and populate the elfBinary object.
-void Elf64Parser::ParseElfFile(std::string& fileName, Elf64Binary& elf64Binary) {
-    std::cout << "Parsing ELF file " << fileName << endl;
-    std::ifstream elfFile;
-
-    OpenElfFile(fileName, elfFile);
-
-    ParseExecutableHeader(elfFile, elf64Binary);
-    ParseProgramHeaders(elfFile, elf64Binary);
-    ParseSectionHeaders(elfFile, elf64Binary);
-    ParseSections(elfFile, elf64Binary);
-
-    CloseElfFile(elfFile);
-}
-
-void Elf64Parser::OpenElfFile(std::string& fileName, std::ifstream& elfFile) {
+bool Elf64Parser::OpenElfFile(const std::string& fileName, std::ifstream& elfFile) {
     elfFile.open(fileName.c_str(), std::ifstream::in);
 
-    if (!elfFile.is_open()) {
-        std::cerr << "Failed to open the file: " << fileName << endl;
-        exit(-1);
-    }
+    return elfFile.is_open();
 }
 
 void Elf64Parser::CloseElfFile(std::ifstream& elfFile) {
-    if (elfFile.is_open()) {
+    if (!elfFile.is_open())
         elfFile.close();
-    }
 }
 
 // Parse the executable header.
@@ -65,17 +40,16 @@ void Elf64Parser::CloseElfFile(std::ifstream& elfFile) {
 // Note: The command below can be used to print the executable header:
 //
 //  $ readelf -h ../a.out
-void Elf64Parser::ParseExecutableHeader(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
-    std::cout << "Parsing Executable ELF64 Header" << std::endl;
-
+bool Elf64Parser::ParseExecutableHeader(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
     // Move the cursor position to the very beginning.
     elfFile.seekg(0);
     elfFile.read((char*)&elf64Binary.ehdr, sizeof(elf64Binary.ehdr));
 
-    if (!elfFile.good()) {
-        std::cerr << "Failed to read the executable header" << std::endl;
-        exit(-1);
-    }
+    return elfFile.good();
+}
+
+bool Elf64Parser::IsElf64(Elf64Binary& elf64Binary) {
+    return elf64Binary.ehdr.e_ident[EI_CLASS] == ELFCLASS64;
 }
 
 // Parse the Program or Segment Headers.
@@ -84,112 +58,71 @@ void Elf64Parser::ParseExecutableHeader(std::ifstream& elfFile, Elf64Binary& elf
 //
 //  $ readelf --program-headers ./example_4k
 //  $ readelf -l ./example_4k
-void Elf64Parser::ParseProgramHeaders(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
+bool Elf64Parser::ParseProgramHeaders(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
     uint64_t phOffset = elf64Binary.ehdr.e_phoff;
     uint16_t phNum = elf64Binary.ehdr.e_phnum;
-
-    std::cout << "Parsing Program Headers" << std::endl;
 
     // Move the cursor position to the program header offset.
     elfFile.seekg(phOffset);
 
     for (int i = 0; i < phNum; i++) {
-        Elf64_Phdr* phdrPtr = new Elf64_Phdr;
+        Elf64_Phdr phdr;
 
-        elfFile.read((char*)phdrPtr, sizeof(*phdrPtr));
-        if (!elfFile.good()) {
-            std::cerr << "Failed to read program header [" << i << "]" << std::endl;
-            exit(-1);
-        }
+        elfFile.read((char*)&phdr, sizeof(phdr));
+        if (!elfFile.good())
+            return false;
 
-        elf64Binary.phdrs.push_back(phdrPtr);
+        elf64Binary.phdrs.push_back(phdr);
     }
+
+    return true;
 }
 
-void Elf64Parser::ParseSections(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
-    std::cout << "Parsing Sections" << std::endl;
+bool Elf64Parser::ParseSections(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
+    Elf64_Sc sStrTblPtr;
 
-    Elf64_Sc* sStrTblPtr;
     // Parse sections after reading all the section headers.
     for (int i = 0; i < elf64Binary.shdrs.size(); i++) {
-        Elf64_Shdr* shdrPtr = elf64Binary.shdrs[i];
-        uint64_t sOffset = shdrPtr->sh_offset;
-        uint64_t sSize = shdrPtr->sh_size;
+        Elf64_Shdr shdr = elf64Binary.shdrs[i];
+        uint64_t sOffset = shdr.sh_offset;
+        uint64_t sSize = shdr.sh_size;
 
-        Elf64_Sc* sPtr = new Elf64_Sc;
-        uint8_t* data = NULL;
+        Elf64_Sc section;
 
         // Skip .bss section.
-        if (shdrPtr->sh_type != SHT_NOBITS) {
-            data = new uint8_t[sSize];
+        if (shdr.sh_type != SHT_NOBITS) {
+            section.data.resize(sSize);
 
             // Move the cursor position to the section offset.
             elfFile.seekg(sOffset);
-            elfFile.read((char*)data, sSize);
-            if (!elfFile.good()) {
-                std::cerr << "Failed to read section [" << i << "]"
-                          << " with offset " << std::hex << sOffset << " and size " << std::dec
-                          << sSize << std::endl;
-                exit(-1);
-            }
+            elfFile.read(section.data.data(), sSize);
+            if (!elfFile.good())
+                return false;
         }
 
-        sPtr->data = data;
-        sPtr->size = sSize;
-        sPtr->index = i;
+        section.size = sSize;
+        section.index = i;
 
-        // If string table section, parse the section names.
         // The index of the string table is in the executable header.
         if (elf64Binary.ehdr.e_shstrndx == i) {
-            sStrTblPtr = sPtr;
-            ParseStringTableSection(elf64Binary, sPtr);
+            sStrTblPtr = section;
         }
 
-        elf64Binary.sections.push_back(sPtr);
+        elf64Binary.sections.push_back(section);
     }
 
     // Set the data section name.
     // This is done after reading the data section with index e_shstrndx.
     for (int i = 0; i < elf64Binary.sections.size(); i++) {
-        Elf64_Sc* sPtr = elf64Binary.sections[i];
-        Elf64_Shdr* shdrPtr = elf64Binary.shdrs[i];
-        uint32_t nameIdx = shdrPtr->sh_name;
-        char* st = (char*)sStrTblPtr->data;
+        Elf64_Sc section = elf64Binary.sections[i];
+        Elf64_Shdr shdr = elf64Binary.shdrs[i];
+        uint32_t nameIdx = shdr.sh_name;
+        char* st = sStrTblPtr.data.data();
 
-        sPtr->name = &st[nameIdx];
-    }
-}
-
-// Parse all the section header names store in .shstrndx section. The
-// first character in .shstrndx section is NULL, after that the NULL terminated
-// strings can be found.
-//
-// The content of the section can be seen with the command.
-//
-//   $ readelf -x .shstrtab ./a.out
-//   $ readelf -p .shstrtab ./a.out
-//
-// Note: The size of {@code elf64Binary.sectionNames} could be different from the
-//       total number of sections. This is due that a string like
-//       ".plt.got", in the string array, could also be used by the section
-//       name ".got".
-void Elf64Parser::ParseStringTableSection(Elf64Binary& elf64Binary, Elf64_Sc* sPtr) {
-    char* st = (char*)sPtr->data;
-    // First byte in the section is NULL, so it is ignored.
-    uint64_t offRead = 1;
-    elf64Binary.sectionNames.push_back(new std::string(""));
-
-    if (sPtr->size <= 1) {
-        return;
+        section.name = &st[nameIdx];
     }
 
-    while (offRead < sPtr->size) {
-        std::string* str = new std::string(&st[offRead]);
-        elf64Binary.sectionNames.push_back(str);
-
-        // Add the length of the string plus the null terminator.
-        offRead += str->length() + 1;
-    }
+    return true;
 }
 
 // Parse the Section Headers.
@@ -198,27 +131,46 @@ void Elf64Parser::ParseStringTableSection(Elf64Binary& elf64Binary, Elf64_Sc* sP
 //
 //   $ readelf --sections ./example_4k
 //   $ readelf -S ./example_4k
-void Elf64Parser::ParseSectionHeaders(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
+bool Elf64Parser::ParseSectionHeaders(std::ifstream& elfFile, Elf64Binary& elf64Binary) {
     uint64_t shOffset = elf64Binary.ehdr.e_shoff;
     uint16_t shNum = elf64Binary.ehdr.e_shnum;
-
-    std::cout << "Parsing Section Headers" << std::endl;
 
     // Move the cursor position to the section headers offset.
     elfFile.seekg(shOffset);
 
     for (int i = 0; i < shNum; i++) {
-        Elf64_Shdr* shdrPtr = new Elf64_Shdr;
+        Elf64_Shdr shdr;
 
-        elfFile.read((char*)shdrPtr, sizeof(*shdrPtr));
-        if (!elfFile.good()) {
-            std::cerr << "Failed to read section header [" << i << "]" << std::endl;
-            exit(-1);
-        }
+        elfFile.read((char*)&shdr, sizeof(shdr));
+        if (!elfFile.good())
+            return false;
 
-        elf64Binary.shdrs.push_back(shdrPtr);
+        elf64Binary.shdrs.push_back(shdr);
     }
+
+    return true;
 }
 
-}  // namespace elf
-}  // namespace lib
+// Parse the elf file and populate the elfBinary object.
+bool Elf64Parser::ParseElfFile(const std::string& fileName, Elf64Binary& elf64Binary) {
+    std::ifstream elfFile;
+    bool ret = false;
+
+    if (OpenElfFile(fileName, elfFile) &&
+        ParseExecutableHeader(elfFile, elf64Binary) &&
+        IsElf64(elf64Binary) &&
+        ParseProgramHeaders(elfFile, elf64Binary) &&
+        ParseSectionHeaders(elfFile, elf64Binary) &&
+        ParseSections(elfFile, elf64Binary)) {
+        elf64Binary.path = fileName;
+        ret = true;
+    }
+
+    CloseElfFile(elfFile);
+
+    return ret;
+}
+
+}  // namespace elf64
+}  // namespace android
+
