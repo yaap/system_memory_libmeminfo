@@ -258,6 +258,9 @@ int main(int argc, char* argv[]) {
 
     if (show_dmabuf_sysfs_stats) {
         DumpDmabufSysfsStats();
+    }
+
+    if (!show_table && show_dmabuf_sysfs_stats) {
         return 0;
     }
 
@@ -276,11 +279,14 @@ int main(int argc, char* argv[]) {
 
     // Show the old dmabuf table, inode x process
     if (show_table) {
+        printf("%s", (show_dmabuf_sysfs_stats) ? "\n\n" : "");
         PrintDmaBufTable(bufs);
         return 0;
     }
 
-    PrintDmaBufPerProcess(bufs);
+    if (!show_table && !show_dmabuf_sysfs_stats) {
+        PrintDmaBufPerProcess(bufs);
+    }
 
     return 0;
 }
