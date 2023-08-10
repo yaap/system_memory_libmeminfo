@@ -25,22 +25,30 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include <android-base/stringprintf.h>
-#include <dmabufinfo/dmabufinfo.h>
 #include <dmabufinfo/dmabuf_sysfs_stats.h>
+#include <dmabufinfo/dmabufinfo.h>
+#include <meminfo/procmeminfo.h>
+
+#include "include/dmabuf_output_helper.h"
 
 using DmaBuffer = ::android::dmabufinfo::DmaBuffer;
+using Format = ::android::meminfo::Format;
+
+std::unique_ptr<DmabufOutputHelper> outputHelper;
 
 [[noreturn]] static void usage(int exit_status) {
     fprintf(stderr,
-            "Usage: %s [-abh] [per-process/per-buffer stats] \n"
+            "Usage: %s [-abh] [per-process/per-buffer stats] [-o output type]\n"
             "-a\t show all dma buffers (ion) in big table, [buffer x process] grid \n"
             "-b\t show DMA-BUF per-buffer, per-exporter and per-device statistics \n"
+            "-o\t [raw][csv] print output in the specified format.\n"
             "-h\t show this help\n"
             "  \t If PID is supplied, the dmabuf information for that process is shown.\n"
             "  \t Per-buffer DMA-BUF stats do not take an argument.\n",
@@ -65,16 +73,18 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
         return;
     }
 
+    printf("\n----------------------- DMA-BUF Table buffer x process --------------------------\n");
+
     // Find all unique pids in the input vector, create a set
     std::set<pid_t> pid_set;
     for (auto& buf : bufs) {
         pid_set.insert(buf.pids().begin(), buf.pids().end());
     }
 
-    // Format the header string spaced and separated with '|'
-    printf("    Dmabuf Inode |            Size |   Fd Ref Counts |  Map Ref Counts |");
+    outputHelper->BufTableMainHeaders();
     for (auto pid : pid_set) {
-        printf("%16s:%-5d |", GetProcessComm(pid).c_str(), pid);
+        std::string process = GetProcessComm(pid);
+        outputHelper->BufTableProcessHeader(pid, process);
     }
     printf("\n");
 
@@ -84,9 +94,7 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
 
     // Iterate through all dmabufs and collect per-process sizes, refs
     for (auto& buf : bufs) {
-        printf("%16ju |%13" PRIu64 " kB |%16zu |%16zu |",
-               static_cast<uintmax_t>(buf.inode()), buf.size() / 1024, buf.fdrefs().size(),
-               buf.maprefs().size());
+        outputHelper->BufTableStats(buf);
         // Iterate through each process to find out per-process references for each buffer,
         // gather total size used by each process etc.
         for (pid_t pid : pid_set) {
@@ -108,23 +116,25 @@ static void PrintDmaBufTable(const std::vector<DmaBuffer>& bufs) {
                 // If one wants to get the total *unique* dma buffers, they can simply
                 // sum the size of all dma bufs shown by the tool
                 per_pid_size[pid] += buf.size() / 1024;
-                printf("%9d(%6d) refs |", pid_fdrefs, pid_maprefs);
-            } else {
-                printf("%22s |", "--");
             }
+            outputHelper->BufTableProcessSize(pid_fdrefs, pid_maprefs);
         }
         dmabuf_total_size += buf.size() / 1024;
         printf("\n");
     }
 
     printf("------------------------------------\n");
-    printf("%-16s  %13" PRIu64 " kB |%16s |%16s |", "TOTALS", dmabuf_total_size, "n/a", "n/a");
+    outputHelper->BufTableTotalHeader();
     for (auto pid : pid_set) {
-        printf("%19" PRIu64 " kB |", per_pid_size[pid]);
+        std::string process = GetProcessComm(pid);
+        outputHelper->BufTableTotalProcessHeader(pid, process);
+    }
+
+    outputHelper->BufTableTotalStats(dmabuf_total_size);
+    for (auto const& [pid, pid_size] : per_pid_size) {
+        outputHelper->BufTableTotalProcessStats(pid_size);
     }
     printf("\n");
-
-    return;
 }
 
 static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
@@ -153,18 +163,16 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
         uint64_t pss = 0;
         uint64_t rss = 0;
 
-        printf("%16s:%-5d\n", GetProcessComm(pid).c_str(), pid);
-        printf("%22s %16s %16s %16s %16s\n", "Name", "Rss", "Pss", "nr_procs", "Inode");
+        outputHelper->PerProcessHeader(GetProcessComm(pid), pid);
+
         for (auto& inode : inodes) {
             DmaBuffer& buf = inode_to_dmabuf[inode];
-            printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16zu %16" PRIuMAX "\n",
-                   buf.name().empty() ? "<unknown>" : buf.name().c_str(), buf.size() / 1024,
-                   buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()));
+            outputHelper->PerProcessBufStats(buf);
             rss += buf.size();
             pss += buf.Pss();
         }
-        printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16s\n", "PROCESS TOTAL", rss / 1024,
-               pss / 1024, "");
+
+        outputHelper->PerProcessTotalStat(pss, rss);
         printf("----------------------\n");
         total_rss += rss;
         total_pss += pss;
@@ -180,10 +188,8 @@ static void PrintDmaBufPerProcess(const std::vector<DmaBuffer>& bufs) {
     } else {
         printf("Warning: Could not get total exported dmabufs. Kernel size will be 0.\n");
     }
-    printf("dmabuf total: %" PRIu64 " kB kernel_rss: %" PRIu64 " kB userspace_rss: %" PRIu64
-           " kB userspace_pss: %" PRIu64 " kB\n ",
-           (userspace_size + kernel_rss) / 1024, kernel_rss / 1024, total_rss / 1024,
-           total_pss / 1024);
+
+    outputHelper->TotalProcessesStats(total_rss, total_pss, userspace_size, kernel_rss);
 }
 
 static void DumpDmabufSysfsStats() {
@@ -197,22 +203,21 @@ static void DumpDmabufSysfsStats() {
     auto buffer_stats = stats.buffer_stats();
     auto exporter_stats = stats.exporter_info();
 
-    printf("\n\n----------------------- DMA-BUF per-buffer stats -----------------------\n");
-    printf("    Dmabuf Inode |     Size(bytes) |             Exporter Name             |\n");
+    const char separator[] = "-----------------------";
+    printf("\n\n%s DMA-BUF per-buffer stats %s\n", separator, separator);
+    outputHelper->PerBufferHeader();
     for (const auto& buf : buffer_stats) {
-        printf("%16lu |%" PRIu64 " | %16s \n", buf.inode, buf.size, buf.exp_name.c_str());
+        outputHelper->PerBufferStats(buf);
     }
 
-    printf("\n\n----------------------- DMA-BUF exporter stats -----------------------\n");
-    printf("      Exporter Name              | Total Count |     Total Size(bytes)   |\n");
-    for (const auto& it : exporter_stats) {
-        printf("%32s | %12u| %" PRIu64 "\n", it.first.c_str(), it.second.buffer_count,
-               it.second.size);
+    printf("\n\n%s DMA-BUF exporter stats %s\n", separator, separator);
+    outputHelper->ExporterHeader();
+    for (auto const& [exporter_name, dmaBufTotal] : exporter_stats) {
+        outputHelper->ExporterStats(exporter_name, dmaBufTotal);
     }
 
-    printf("\n\n----------------------- DMA-BUF total stats --------------------------\n");
-    printf("Total DMA-BUF count: %u, Total DMA-BUF size(bytes): %" PRIu64 "\n", stats.total_count(),
-           stats.total_size());
+    printf("\n\n%s DMA-BUF total stats %s\n", separator, separator);
+    outputHelper->SysfsBufTotalStats(stats);
 }
 
 int main(int argc, char* argv[]) {
@@ -224,7 +229,8 @@ int main(int argc, char* argv[]) {
     int opt;
     bool show_table = false;
     bool show_dmabuf_sysfs_stats = false;
-    while ((opt = getopt_long(argc, argv, "abh", longopts, nullptr)) != -1) {
+    Format format = Format::RAW;
+    while ((opt = getopt_long(argc, argv, "abho:", longopts, nullptr)) != -1) {
         switch (opt) {
             case 'a':
                 show_table = true;
@@ -232,11 +238,29 @@ int main(int argc, char* argv[]) {
             case 'b':
                 show_dmabuf_sysfs_stats = true;
                 break;
+            case 'o':
+                format = android::meminfo::GetFormat(optarg);
+                switch (format) {
+                    case Format::CSV:
+                        outputHelper = std::make_unique<CsvOutput>();
+                        break;
+                    case Format::RAW:
+                        outputHelper = std::make_unique<RawOutput>();
+                        break;
+                    default:
+                        fprintf(stderr, "Invalid output format.\n");
+                        usage(EXIT_FAILURE);
+                }
+                break;
             case 'h':
                 usage(EXIT_SUCCESS);
             default:
                 usage(EXIT_FAILURE);
         }
+    }
+
+    if (!outputHelper) {
+        outputHelper = std::make_unique<RawOutput>();
     }
 
     pid_t pid = -1;
