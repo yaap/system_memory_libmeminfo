@@ -364,6 +364,23 @@ TEST(ProcMemInfo, SmapsOrRollupPssSmapsTest) {
     EXPECT_EQ(pss, 19119);
 }
 
+TEST(ProcMemInfo, StatusVmRSSTest) {
+    std::string exec_dir = ::android::base::GetExecutableDirectory();
+    std::string path = ::android::base::StringPrintf("%s/testdata1/status", exec_dir.c_str());
+
+    uint64_t rss;
+    ASSERT_EQ(StatusVmRSSFromFile(path, &rss), true);
+    EXPECT_EQ(rss, 730764);
+}
+
+TEST(ProcMemInfo, StatusVmRSSBogusFileTest) {
+    std::string exec_dir = ::android::base::GetExecutableDirectory();
+    std::string path = ::android::base::StringPrintf("%s/testdata1/smaps", exec_dir.c_str());
+
+    uint64_t rss;
+    ASSERT_EQ(StatusVmRSSFromFile(path, &rss), false);
+}
+
 TEST(ProcMemInfo, ForEachExistingVmaTest) {
     std::string exec_dir = ::android::base::GetExecutableDirectory();
     std::string path = ::android::base::StringPrintf("%s/testdata1/smaps_short", exec_dir.c_str());

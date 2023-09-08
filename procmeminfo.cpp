@@ -315,6 +315,11 @@ bool ProcMemInfo::SmapsOrRollupPss(uint64_t* pss) const {
     return SmapsOrRollupPssFromFile(path, pss);
 }
 
+bool ProcMemInfo::StatusVmRSS(uint64_t* rss) const {
+    std::string path = ::android::base::StringPrintf("/proc/%d/status", pid_);
+    return StatusVmRSSFromFile(path, rss);
+}
+
 const std::vector<uint64_t>& ProcMemInfo::SwapOffsets() {
     if (get_wss_) {
         LOG(WARNING) << "Trying to read process swap offsets for " << pid_
@@ -706,6 +711,34 @@ bool SmapsOrRollupPssFromFile(const std::string& path, uint64_t* pss) {
     // free getline() managed buffer
     free(line);
     return true;
+}
+
+bool StatusVmRSSFromFile(const std::string& path, uint64_t* rss) {
+    auto fp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(path.c_str(), "re"), fclose};
+    if (fp == nullptr) {
+        return false;
+    }
+
+    // We use this bool because -1 as an "invalid" value for RSS will wrap
+    // around to a positive number.
+    bool success = false;
+
+    *rss = 0;
+    char* line = nullptr;
+    size_t line_alloc = 0;
+    while (getline(&line, &line_alloc, fp.get()) > 0) {
+        uint64_t v;
+        if (sscanf(line, "VmRSS: %" SCNu64 " kB", &v) == 1) {
+            *rss = v;
+            success = true;
+            // Break because there is only one VmRSS field in status.
+            break;
+        }
+    }
+
+    // free getline() managed buffer
+    free(line);
+    return success;
 }
 
 Format GetFormat(std::string_view arg) {
