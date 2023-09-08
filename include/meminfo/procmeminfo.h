@@ -108,6 +108,14 @@ class ProcMemInfo final {
     // Returns 'true' on success and the value of Pss in the out parameter.
     bool SmapsOrRollupPss(uint64_t* pss) const;
 
+    // Used to parse /proc/<pid>/status and record the process's RSS memory as
+    // reported by VmRSS. This is cheaper than using smaps or maps. VmRSS as
+    // reported by the kernel is not accurate; one of the maps or smaps methods
+    // should be used if an estimate is not sufficient.
+    //
+    // Returns 'true' on success and the value of VmRSS in the out parameter.
+    bool StatusVmRSS(uint64_t* rss) const;
+
     const std::vector<uint64_t>& SwapOffsets();
 
     // Reads /proc/<pid>/pagemap for this process for each page within
@@ -157,6 +165,10 @@ bool SmapsOrRollupFromFile(const std::string& path, MemUsage* stats);
 // from a file and returns total Pss in kB. The file MUST be in the same format
 // as /proc/<pid>/smaps or /proc/<pid>/smaps_rollup
 bool SmapsOrRollupPssFromFile(const std::string& path, uint64_t* pss);
+
+// Same as ProcMemInfo::StatusVmRSS but reads the statistics directly from a file.
+// The file MUST be in the same format as /proc/<pid>/status.
+bool StatusVmRSSFromFile(const std::string& path, uint64_t* rss);
 
 // The output format that can be specified by user.
 enum class Format { INVALID = 0, RAW, JSON, CSV };
