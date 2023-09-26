@@ -800,7 +800,7 @@ struct VmaInfo {
     bool is_bss;
     uint32_t count;
 
-    VmaInfo() = default;
+    VmaInfo() : is_bss(false), count(0) {};
     VmaInfo(const Vma& v) : vma(v), is_bss(false), count(1) {}
     VmaInfo(const Vma& v, bool bss) : vma(v), is_bss(bss), count(1) {}
     VmaInfo(const Vma& v, const std::string& name, bool bss) : vma(v), is_bss(bss), count(1) {
