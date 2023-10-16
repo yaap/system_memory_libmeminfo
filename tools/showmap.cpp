@@ -47,7 +47,7 @@ using ::android::meminfo::GetFormat;
               << "-v\tverbose (don't coalesce maps with the same name)\n"
               << "-f\tFILE (read from input from FILE instead of PID)\n"
               << "-o\t[raw][json][csv] Print output in the specified format.\n"
-              << "  \tDefault output format is raw text.)\n";
+              << "  \tDefault output format is raw text. All memory in KB.)\n";
 
     exit(exit_status);
 }
