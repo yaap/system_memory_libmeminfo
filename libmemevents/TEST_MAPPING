@@ -1,12 +1,7 @@
 {
   "postsubmit": [
     {
-      "name": "memevents_test",
-      "options": [
-        {
-          "include-filter": "*MemEventsTest.*"
-        }
-      ]
+      "name": "memevents_test"
     }
   ]
 }
