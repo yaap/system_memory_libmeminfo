@@ -21,7 +21,10 @@
 
 #define MEM_EVENT_PROC_NAME_LEN 16  // linux/sched.h
 
+typedef unsigned int mem_event_type_t;
+/* Supported mem_event_type_t */
 #define MEM_EVENT_OOM_KILL 0
+#define MEM_EVENT_BASE MEM_EVENT_OOM_KILL
 #define MEM_EVENT_DIRECT_RECLAIM_BEGIN 1
 #define MEM_EVENT_DIRECT_RECLAIM_END 2
 
