@@ -40,7 +40,7 @@ namespace bpf {
 namespace memevents {
 
 static const std::string kClientRingBuffers[MemEventClient::NR_CLIENTS] = {
-        "/sys/fs/bpf/map_bpfMemEvents_ams_rb", "/sys/fs/bpf/map_bpfMemEvents_lmkd_rb"};
+        MEM_EVENTS_AMS_RB, MEM_EVENTS_TEST_RB, MEM_EVENTS_TEST_RB};
 
 class MemBpfRingbuf : public BpfRingbufBase {
   public:
@@ -86,7 +86,7 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {{
     // AMS
     {
         {
-            .prog = "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_oom_mark_victim_ams",
+            .prog = MEM_EVENTS_AMS_OOM_MARK_VICTIM_TP,
             .tpGroup = "oom",
             .tpEvent = "mark_victim"
         },
@@ -94,14 +94,12 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {{
     // LMKD
     {
         {
-            .prog = "/sys/fs/bpf/"
-                        "prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd",
+            .prog = MEM_EVENTS_LMKD_VMSCAN_DR_BEGIN_TP,
             .tpGroup = "vmscan",
             .tpEvent = "mm_vmscan_direct_reclaim_begin"
         },
         {
-            .prog = "/sys/fs/bpf/"
-                        "prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd",
+            .prog = MEM_EVENTS_LMKD_VMSCAN_DR_END_TP,
             .tpGroup = "vmscan",
             .tpEvent = "mm_vmscan_direct_reclaim_end"
         },
@@ -168,6 +166,12 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
         return true;
     }
 
+    if (mClient == MemEventClient::TEST_CLIENT) {
+        mEventsRegistered[event_type] = true;
+        mNumEventsRegistered++;
+        return true;
+    }
+
     if (event_type >= attachments[mClient].size()) {
         /*
          * Not all clients have access to the same tracepoints, for example,
@@ -222,6 +226,12 @@ bool MemEventListener::deregisterEvent(mem_event_type_t event_type) {
     }
 
     if (!mEventsRegistered[event_type]) return true;
+
+    if (mClient == MemEventClient::TEST_CLIENT) {
+        mEventsRegistered[event_type] = false;
+        mNumEventsRegistered--;
+        return true;
+    }
 
     const auto attachment = attachments[mClient][event_type];
     if (bpf_detach_tracepoint(attachment.tpGroup.c_str(), attachment.tpEvent.c_str()) < 0) {
