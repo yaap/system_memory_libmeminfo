@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 #include <bpf_helpers.h>
+#include <string.h>
 
 #include <linux/bpf_perf_event.h>
 
 #include <memevents/bpf_types.h>
-
-#define RINGBUF_SIZE 4096
 
 static inline void read_str(char* base, uint32_t __data_loc_var, char* str) {
     short offset = __data_loc_var & 0xFFFF;
@@ -28,24 +27,15 @@ static inline void read_str(char* base, uint32_t __data_loc_var, char* str) {
     return;
 }
 
-DEFINE_BPF_RINGBUF_EXT(ams_rb, struct mem_event_t, RINGBUF_SIZE, DEFAULT_BPF_MAP_UID, AID_SYSTEM,
-                       0660, DEFAULT_BPF_MAP_SELINUX_CONTEXT, DEFAULT_BPF_MAP_PIN_SUBDIR, PRIVATE,
-                       BPFLOADER_MIN_VER, BPFLOADER_MAX_VER, LOAD_ON_ENG, LOAD_ON_USER,
-                       LOAD_ON_USERDEBUG)
+DEFINE_BPF_RINGBUF_EXT(ams_rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID,
+                       AID_SYSTEM, 0660, DEFAULT_BPF_MAP_SELINUX_CONTEXT,
+                       DEFAULT_BPF_MAP_PIN_SUBDIR, PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER,
+                       LOAD_ON_ENG, LOAD_ON_USER, LOAD_ON_USERDEBUG)
 
-DEFINE_BPF_RINGBUF_EXT(lmkd_rb, struct mem_event_t, RINGBUF_SIZE, DEFAULT_BPF_MAP_UID, AID_SYSTEM,
-                       0660, DEFAULT_BPF_MAP_SELINUX_CONTEXT, DEFAULT_BPF_MAP_PIN_SUBDIR, PRIVATE,
-                       BPFLOADER_MIN_VER, BPFLOADER_MAX_VER, LOAD_ON_ENG, LOAD_ON_USER,
-                       LOAD_ON_USERDEBUG)
-
-struct mark_victim_args {
-    uint64_t __ignore;
-    /* Actual fields start at offset 8 */
-    int pid;
-    int uid;
-    uint32_t __data_loc_comm;
-    short oom_score_adj;
-};
+DEFINE_BPF_RINGBUF_EXT(lmkd_rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID,
+                       AID_SYSTEM, 0660, DEFAULT_BPF_MAP_SELINUX_CONTEXT,
+                       DEFAULT_BPF_MAP_PIN_SUBDIR, PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER,
+                       LOAD_ON_ENG, LOAD_ON_USER, LOAD_ON_USERDEBUG)
 
 DEFINE_BPF_PROG("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM, tp_ams)
 (struct mark_victim_args* args) {
@@ -66,10 +56,6 @@ DEFINE_BPF_PROG("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM, tp_ams)
     return 0;
 }
 
-struct direct_reclaim_begin_args {
-    char __ignore[24];
-};
-
 DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_direct_reclaim_begin/lmkd", AID_ROOT, AID_SYSTEM,
                 tp_lmkd_dr_start)
 (struct direct_reclaim_begin_args* args) {
@@ -82,10 +68,6 @@ DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_direct_reclaim_begin/lmkd", AID_ROO
 
     return 0;
 }
-
-struct direct_reclaim_end_args {
-    char __ignore[16];
-};
 
 DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_direct_reclaim_end/lmkd", AID_ROOT, AID_SYSTEM,
                 tp_lmkd_dr_end)

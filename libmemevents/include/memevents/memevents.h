@@ -32,6 +32,13 @@ enum MemEventClient {
     BASE = 0,
     AMS = BASE,
     LMKD,
+    /*
+     * Flag to indicate whether this `MemEventListener` instance is used for
+     * testing purposes. This allows us to skip internal calls that would
+     * otherwise interfere with test setup, and mocks for BPF ring buffer,
+     * and BPF program behavior.
+     */
+    TEST_CLIENT,
     // NR_CLIENTS should always come after the last valid client
     NR_CLIENTS
 };
