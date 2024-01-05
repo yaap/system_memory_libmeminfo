@@ -19,6 +19,8 @@
 
 #include <inttypes.h>
 
+#define MEM_EVENT_PROC_NAME_LEN 16  // linux/sched.h
+
 #define MEM_EVENT_OOM_KILL 0
 #define MEM_EVENT_DIRECT_RECLAIM_BEGIN 1
 #define MEM_EVENT_DIRECT_RECLAIM_END 2
@@ -27,8 +29,17 @@
 #define NR_MEM_EVENTS 3
 
 struct mem_event_t {
-    uint64_t pid;
     uint64_t type;
+
+    union EventData {
+        struct OomKill {
+            uint64_t pid;
+            uint64_t timestamp_ms;
+            uint64_t oom_score_adj;
+            uint64_t uid;
+            char process_name[MEM_EVENT_PROC_NAME_LEN];
+        } oom_kill;
+    } event_data;
 };
 
 #endif /* MEM_EVENTS_BPF_TYES_H_ */
