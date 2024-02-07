@@ -1,7 +1,8 @@
 {
-  "presubmit": [
+  "postsubmit": [
     {
       "name": "memevents_test"
     }
   ]
 }
+

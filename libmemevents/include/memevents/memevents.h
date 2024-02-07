@@ -16,63 +16,70 @@
 
 #pragma once
 
-#include <cstddef>
-#include <deque>
+#include <memory>
 #include <vector>
 
+#include <stddef.h>
+
+#include <memevents/bpf_types.h>
+
 namespace android {
+namespace bpf {
 namespace memevents {
 
-static const int kTaskCommLen = 16;  // linux/sched.h
-
-enum MemEvent {
-    OOM_KILL = 0,
-    // NR_MEM_EVENTS should always come after the last valid event type
-    NR_MEM_EVENTS,
-    ERROR = -1,
+enum MemEventClient {
+    // BASE should always be first, used for lower-bound checks
+    BASE = 0,
+    AMS = BASE,
+    LMKD,
+    /*
+     * Flag to indicate whether this `MemEventListener` instance is used for
+     * testing purposes. This allows us to skip internal calls that would
+     * otherwise interfere with test setup, and mocks for BPF ring buffer,
+     * and BPF program behavior.
+     */
+    TEST_CLIENT,
+    // NR_CLIENTS should always come after the last valid client
+    NR_CLIENTS
 };
 
-struct OomKill {
-    int pid;
-    long uid;
-    unsigned long long timestamp_ms;
-    short oom_score_adj;
-    char process_name[kTaskCommLen];
-};
+class MemBpfRingbuf;
 
 class MemEventListener final {
   public:
-    MemEventListener();
+    MemEventListener(MemEventClient client);
     ~MemEventListener();
 
     /**
-     * Registers the requested memory event to the listener. File
-     * descriptor gets attached to the `mEpfd`.
-     *
-     * Will create a new epoll instance (epfd) if one hasn't been created.
+     * Registers the requested memory event to the listener.
      *
      * @param event_type Memory event type to listen for.
      * @return true if registration was successful, false otherwise.
      */
-    bool registerEvent(MemEvent event_type);
+    bool registerEvent(mem_event_type_t event_type);
 
     /**
      * Waits for a [registered] memory event notification.
      *
-     * @return memory event type that has [new] unread entries.
+     * `listen()` will block until either:
+     *    - Receives a registered memory event
+     *    - Timeout expires
+     *
+     * Note that the default timeout (-1) causes `listen()` to block
+     * indefinitely.
+     *
+     * @param timeout_ms number of milliseconds that listen will block.
+     * @return true if there are new memory events to read, false otherwise.
      */
-    MemEvent listen();
+    bool listen(int timeout_ms = -1);
 
     /**
      * Stops listening for a specific memory event type.
      *
-     * In the case we deregister the only/last registered event, we also
-     * close the `mEpfd` and terminate any ongoing `listen()`.
-     *
      * @param event_type Memory event type to stop listening to.
      * @return true if unregistering was successful, false otherwise
      */
-    bool deregisterEvent(MemEvent event_type);
+    bool deregisterEvent(mem_event_type_t event_type);
 
     /**
      * Closes all the events' file descriptors and `mEpfd`. This will also
@@ -81,27 +88,27 @@ class MemEventListener final {
     void deregisterAllEvents();
 
     /**
-     * Retrieves unread OOM events, and stores them into the
-     * provided `oom_events` vector.
+     * Retrieves unread [registered] memory events, and stores them into the
+     * provided `mem_events` vector.
      *
-     * On first invocation, it will read/store all the entries from the
-     * OOM's event file. After the initial invocation, it will only
-     * read/store new, unread, events.
+     * On first invocation, it will read/store all memory events. After the
+     * initial invocation, it will only read/store new, unread, events.
      *
-     * @param oom_events vector in which we want to append the read OOM
-     * events.
+     * @param mem_events vector in which we want to append the read
+     * memory events.
      * @return true on success, false on failure.
      */
-    bool getOomEvents(std::vector<OomKill>& oom_events);
+    bool getMemEvents(std::vector<mem_event_t>& mem_events);
 
   private:
-    int mEpfd;
-    int mFds[NR_MEM_EVENTS];
-    std::deque<MemEvent> mPendingEvents;
+    bool mEventsRegistered[NR_MEM_EVENTS];
+    int mNumEventsRegistered;
+    MemEventClient mClient;
+    std::unique_ptr<MemBpfRingbuf> memBpfRb;
 
-    bool readOomFile(int fd, std::vector<OomKill>& oom_events);
-    bool isValidEventType(MemEvent event_type);
+    bool isValidEventType(mem_event_type_t event_type) const;
 };
 
 }  // namespace memevents
+}  // namespace bpf
 }  // namespace android

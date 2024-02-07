@@ -13,358 +13,445 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <chrono>
-#include <condition_variable>
 #include <filesystem>
-#include <memory>
-#include <mutex>
-#include <thread>
-#include <vector>
+#include <string>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
-#include <android-base/stringprintf.h>
+#include <bpf/BpfUtils.h>
 #include <gtest/gtest.h>
-#include <sys/mman.h>
-#include <sys/sysinfo.h>
+#include <string.h>
 #include <unistd.h>
 
+#include <BpfSyscallWrappers.h>
+
 #include <memevents/memevents.h>
+#include <memevents/memevents_test.h>
 
 using namespace ::android::base;
-using namespace ::android::memevents;
+using namespace ::android::bpf::memevents;
+
+using android::bpf::isAtLeastKernelVersion;
 
 namespace fs = std::filesystem;
 
-static const std::filesystem::path memhealth_dir_path = "proc/memhealth";
-static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
+static const MemEventClient mem_test_client = MemEventClient::TEST_CLIENT;
+static const int page_size = getpagesize();
+static const bool isBpfRingBufferSupported = isAtLeastKernelVersion(5, 8, 0);
+static const std::string bpfRbsPaths[MemEventClient::NR_CLIENTS] = {
+        MEM_EVENTS_AMS_RB, MEM_EVENTS_LMKD_RB, MEM_EVENTS_TEST_RB};
+static const std::string testBpfProgPaths[NR_MEM_EVENTS] = {MEM_EVENTS_TEST_OOM_KILL_TP,
+                                                            MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP,
+                                                            MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP};
 
-class MemEventsTest : public ::testing::Test {
+/*
+ * Test suite to test on devices that don't support BPF, kernel <= 5.8.
+ * We allow for the listener to iniailize gracefully, but every public API will
+ * return false/fail.
+ */
+class MemEventListenerUnsupportedKernel : public ::testing::Test {
   protected:
-    MemEventListener memevent_listener;
+    MemEventListener memevent_listener = MemEventListener(mem_test_client);
+
+    static void SetUpTestSuite() {
+        if (isBpfRingBufferSupported) {
+            GTEST_SKIP()
+                    << "BPF ring buffers is supported on this kernel, running alternative tests";
+        }
+    }
 
     void TearDown() override { memevent_listener.deregisterAllEvents(); }
+};
 
+/*
+ * Listener shouldn't fail when initializing on a kernel that doesn't support BPF.
+ */
+TEST_F(MemEventListenerUnsupportedKernel, initialize_invalid_client) {
+    std::unique_ptr<MemEventListener> listener =
+            std::make_unique<MemEventListener>(MemEventClient::AMS);
+    ASSERT_TRUE(listener) << "Failed to initialize listener on older kernel";
+}
+
+/*
+ * Register will fail when running on a older kernel, even when we pass a valid event type.
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_register) {
+    ASSERT_FALSE(memevent_listener.registerEvent(MEM_EVENT_OOM_KILL))
+            << "Listener should fail to register valid event type on an unsupported kernel";
+    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS))
+            << "Listener should fail to register invalid event type";
+}
+
+/*
+ * Listen will fail when running on a older kernel.
+ * The listen() function always checks first if we are running on an older kernel,
+ * therefore we don't need to register for an event before trying to call listen.
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_listen) {
+    ASSERT_FALSE(memevent_listener.listen()) << "listen() should fail on unsupported kernel";
+}
+
+/*
+ * Just like the other APIs, deregister will return false immediately on an older
+ * kernel.
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_unregister_event) {
+    ASSERT_FALSE(memevent_listener.deregisterEvent(MEM_EVENT_OOM_KILL))
+            << "Listener should fail to deregister valid event type on an older kernel";
+    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS))
+            << "Listener should fail to deregister invalid event type, regardless of kernel "
+               "version";
+}
+
+/*
+ * The `getMemEvents()` API should fail on an older kernel.
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_mem_events) {
+    std::vector<mem_event_t> mem_events;
+    ASSERT_FALSE(memevent_listener.getMemEvents(mem_events))
+            << "Fetching memory events should fail on an older kernel";
+}
+
+/*
+ * Test suite verifies that all the BPF programs and ring buffers are loaded.
+ */
+class MemEventsBpfSetupTest : public ::testing::Test {
+  protected:
     static void SetUpTestSuite() {
-        /**
-         * `memhealth` driver needs to be loaded in order
-         * for the `MemEventListener` to register to the memory files.
-         */
-        if (!std::filesystem::exists(memhealth_dir_path))
-            GTEST_SKIP() << "Memhealth driver is not available";
+        if (!isBpfRingBufferSupported) {
+            GTEST_SKIP() << "BPF ring buffers not supported in kernels below 5.8";
+        }
     }
 };
 
-/**
- * Verify that `MemEventListener.registerEvent()` returns false when provided
- * invalid event types.
+/*
+ * Verify that all the ams bpf-programs are loaded.
  */
-TEST_F(MemEventsTest, MemEventListener_registerEvent_invalidEvents) {
-    ASSERT_FALSE(memevent_listener.registerEvent(MemEvent::NR_MEM_EVENTS));
-    ASSERT_FALSE(memevent_listener.registerEvent(MemEvent::ERROR));
+TEST_F(MemEventsBpfSetupTest, loaded_ams_progs) {
+    ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_AMS_OOM_MARK_VICTIM_TP))
+            << "Failed to find ams mark_victim bpf-program";
 }
 
-/**
- * Verify that `MemEventListener.registerEvent()` will not fail when attempting
- * to listen to an already open event file.
+/*
+ * Verify that all the lmkd bpf-programs are loaded.
  */
-TEST_F(MemEventsTest, MemEventListener_registerEvent_alreadyOpenedEvent) {
-    const MemEvent event_type = MemEvent::OOM_KILL;
+TEST_F(MemEventsBpfSetupTest, loaded_lmkd_progs) {
+    ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_LMKD_VMSCAN_DR_BEGIN_TP))
+            << "Failed to find lmkd direct_reclaim_begin bpf-program";
+    ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_LMKD_VMSCAN_DR_END_TP))
+            << "Failed to find lmkd direct_reclaim_end bpf-program";
+}
+
+/*
+ * Verify that all the memevents test bpf-programs are loaded.
+ */
+TEST_F(MemEventsBpfSetupTest, loaded_test_progs) {
+    for (int i = 0; i < NR_MEM_EVENTS; i++) {
+        ASSERT_TRUE(std::filesystem::exists(testBpfProgPaths[i]))
+                << "Failed to find testing bpf-prog: " << testBpfProgPaths[i];
+    }
+}
+
+/*
+ * Verify that all [bpf] ring buffer's are loaded.
+ * We expect to have at least 1 ring buffer for each client in `MemEventClient`.
+ */
+TEST_F(MemEventsBpfSetupTest, loaded_ring_buffers) {
+    for (int i = 0; i < MemEventClient::NR_CLIENTS; i++) {
+        ASSERT_TRUE(std::filesystem::exists(bpfRbsPaths[i]))
+                << "Failed to find bpf ring-buffer: " << bpfRbsPaths[i];
+    }
+}
+
+class MemEventsListenerTest : public ::testing::Test {
+  protected:
+    MemEventListener memevent_listener = MemEventListener(mem_test_client);
+
+    static void SetUpTestSuite() {
+        if (!isBpfRingBufferSupported) {
+            GTEST_SKIP() << "BPF ring buffers not supported in kernels below 5.8";
+        }
+    }
+
+    void TearDown() override { memevent_listener.deregisterAllEvents(); }
+};
+
+/*
+ * MemEventListener should fail, through a `std::abort()`, when attempted to initialize
+ * with an invalid `MemEventClient`. By passing `MemEventClient::NR_CLIENTS`, and attempting
+ * to convert/pass `-1` as a client, we expect the listener initialization to fail.
+ */
+TEST_F(MemEventsListenerTest, initialize_invalid_client) {
+    EXPECT_DEATH(MemEventListener listener(MemEventClient::NR_CLIENTS), "");
+    EXPECT_DEATH(MemEventListener listener(static_cast<MemEventClient>(-1)), "");
+}
+
+/*
+ * MemEventListener should NOT fail when initializing for all valid `MemEventClient`.
+ * We considered a `MemEventClient` valid if its between 0 and MemEventClient::NR_CLIENTS.
+ */
+TEST_F(MemEventsListenerTest, initialize_valid_clients) {
+    std::unique_ptr<MemEventListener> listener;
+    for (int i = 0; i < MemEventClient::NR_CLIENTS; i++) {
+        const MemEventClient client = static_cast<MemEventClient>(i);
+        listener = std::make_unique<MemEventListener>(client);
+        ASSERT_TRUE(listener) << "MemEventListener failed to initialize with valid client value: "
+                              << client;
+    }
+}
+
+/*
+ * MemEventClient base client should equal to AMS client.
+ */
+TEST_F(MemEventsListenerTest, base_client_equal_ams_client) {
+    ASSERT_EQ(static_cast<int>(MemEventClient::BASE), static_cast<int>(MemEventClient::AMS))
+            << "Base client should be equal to AMS client";
+}
+
+/*
+ * Validate `registerEvent()` fails with values >= `NR_MEM_EVENTS`.
+ */
+TEST_F(MemEventsListenerTest, register_event_invalid_values) {
+    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS));
+    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS + 1));
+    ASSERT_FALSE(memevent_listener.registerEvent(-1));
+}
+
+/*
+ * Validate that `registerEvent()` always returns true when we try registering
+ * the same [valid] event/value.
+ */
+TEST_F(MemEventsListenerTest, register_event_repeated_event) {
+    const int event_type = MEM_EVENT_OOM_KILL;
     ASSERT_TRUE(memevent_listener.registerEvent(event_type));
     ASSERT_TRUE(memevent_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener.registerEvent(event_type));
 }
 
-/**
- * Verify that `MemEventListener.listen()` fails if no events are registered.
+/*
+ * Validate that `registerEvent()` is able to register all the `MEM_EVENT_*` values
+ * from `bpf_types.h`.
  */
-TEST_F(MemEventsTest, MemEventListener_listen_invalidEpfd) {
-    ASSERT_EQ(memevent_listener.listen(), MemEvent::ERROR);
+TEST_F(MemEventsListenerTest, register_event_valid_values) {
+    for (unsigned int i = 0; i < NR_MEM_EVENTS; i++)
+        ASSERT_TRUE(memevent_listener.registerEvent(i)) << "Failed to register event: " << i;
 }
 
-/**
- * Verify that if we call `MemEventListener.deregisterEvent()` on the only/last
- * open event, that we close the `epfd` as well.
+/*
+ * `listen()` should return false when no events have been registered.
  */
-TEST_F(MemEventsTest, MemEventListener_listen_closeLastEvent) {
-    ASSERT_TRUE(memevent_listener.registerEvent(MemEvent::OOM_KILL));
-    ASSERT_TRUE(memevent_listener.deregisterEvent(MemEvent::OOM_KILL));
-    ASSERT_EQ(MemEvent::ERROR, memevent_listener.listen());
+TEST_F(MemEventsListenerTest, listen_no_registered_events) {
+    ASSERT_FALSE(memevent_listener.listen());
 }
 
-/**
- * Verify that if we call `MemEventListener.deregisterAllEvents()`
- * that we close the `epfd`.
+/*
+ * Validate `deregisterEvent()` fails with values >= `NR_MEM_EVENTS`.
+ * Exactly like `register_event_invalid_values` test.
  */
-TEST_F(MemEventsTest, MemEventListener_listen_closeAllEvent) {
-    ASSERT_TRUE(memevent_listener.registerEvent(MemEvent::OOM_KILL));
-    memevent_listener.deregisterAllEvents();
-    ASSERT_EQ(MemEvent::ERROR, memevent_listener.listen());
+TEST_F(MemEventsListenerTest, deregister_event_invalid_values) {
+    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS));
+    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS + 1));
+    ASSERT_FALSE(memevent_listener.deregisterEvent(-1));
 }
 
-/**
- * Verify that `MemEventListener.deregisterEvent()` will return false when
- * provided an invalid event types.
+/*
+ * Validate that `deregisterEvent()` always returns true when we try
+ * deregistering the same [valid] event/value.
  */
-TEST_F(MemEventsTest, MemEventListener_deregisterEvent_invalidEvents) {
-    ASSERT_FALSE(memevent_listener.deregisterEvent(MemEvent::NR_MEM_EVENTS));
-    ASSERT_FALSE(memevent_listener.deregisterEvent(MemEvent::ERROR));
-}
-
-/**
- * Verify that the `MemEventListener.deregisterEvent()` will return true
- * when we deregister a non-registered, valid, event.
- *
- * Note that if we attempted to deregister, before calling `registerEvent()`,
- * then `deregisterEvent()` will fail since the listener would have an invalid
- * epfd at that time.
- */
-TEST_F(MemEventsTest, MemEventListener_deregisterEvent_unregisteredEvent) {
-    ASSERT_TRUE(memevent_listener.deregisterEvent(MemEvent::OOM_KILL));
-}
-
-/**
- * Verify that `MemEventListener.getOomEvents()` returns false
- * if the listener hasn't been registered to listen to OOM events.
- *
- * We first have to call `registerEvent()` to ensure we create a
- * epfd.
- */
-TEST_F(MemEventsTest, MemEventListener_getOomEvents_invalidFd) {
-    const MemEvent event_type = MemEvent::OOM_KILL;
+TEST_F(MemEventsListenerTest, deregister_repeated_event) {
+    const int event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
     ASSERT_TRUE(memevent_listener.registerEvent(event_type));
     ASSERT_TRUE(memevent_listener.deregisterEvent(event_type));
-
-    std::vector<OomKill> oom_events;
-    ASSERT_FALSE(memevent_listener.getOomEvents(oom_events));
-    ASSERT_TRUE(oom_events.empty());
+    ASSERT_TRUE(memevent_listener.deregisterEvent(event_type));
 }
 
-/**
- * Verify that if a user calls `MemEventListener.listen()`, that we can
- * exit gracefully, without receiving any events, by calling
- * `MemEventListener.deregisterAllEvents()`.
+/*
+ * Verify that the `deregisterEvent()` will return true
+ * when we deregister a non-registered, valid, event.
  */
-TEST_F(MemEventsTest, MemEventListener_exitListeningGracefully) {
-    const MemEvent oom_event_type = MemEvent::OOM_KILL;
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool finishedCleanly = false;
+TEST_F(MemEventsListenerTest, deregister_unregistered_event) {
+    ASSERT_TRUE(memevent_listener.deregisterEvent(MEM_EVENT_DIRECT_RECLAIM_END));
+}
 
-    ASSERT_TRUE(memevent_listener.registerEvent(oom_event_type));
-
-    std::thread t([&] {
-        memevent_listener.listen();
-        std::lock_guard lk(mtx);
-        finishedCleanly = true;
-        cv.notify_one();
-    });
-
+/*
+ * Validate that the `deregisterAllEvents()` closes all the registered
+ * events.
+ */
+TEST_F(MemEventsListenerTest, deregister_all_events) {
+    ASSERT_TRUE(memevent_listener.registerEvent(MEM_EVENT_OOM_KILL));
+    ASSERT_TRUE(memevent_listener.registerEvent(MEM_EVENT_DIRECT_RECLAIM_BEGIN));
     memevent_listener.deregisterAllEvents();
-    std::unique_lock lk(mtx);
-    cv.wait_for(lk, std::chrono::seconds(10), [&] { return finishedCleanly; });
-    ASSERT_TRUE(finishedCleanly) << "Failed to exit gracefully";
-    t.join();
+    ASSERT_FALSE(memevent_listener.listen())
+            << "Expected to fail since we are not registered to any events";
 }
 
-/**
- * Keep track of all the successful OOM triggers performed by
- * `MemEventsTest.triggerOom()`.
+/*
+ * Validating that `MEM_EVENT_BASE` is equal to `MEM_EVENT_OOM_KILL`.
  */
-static int total_oom_triggers = 0;
-static int page_size = getpagesize();
+TEST_F(MemEventsListenerTest, base_and_oom_events_are_equal) {
+    ASSERT_EQ(MEM_EVENT_OOM_KILL, MEM_EVENT_BASE)
+            << "MEM_EVENT_BASE should be equal to MEM_EVENT_OOM_KILL";
+}
 
-class OutOfMemoryTest : public ::testing::Test {
-  public:
-    static void SetUpTestSuite() {
-        /**
-         * `memhealth` driver needs to be loaded in order
-         * for the `MemEventListener` to register to the memory files.
-         */
-        if (!std::filesystem::exists(memhealth_dir_path))
-            GTEST_SKIP() << "Memhealth driver is not available";
+class MemEventsListenerBpf : public ::testing::Test {
+  private:
+    android::base::unique_fd mProgram;
 
-        if (!std::filesystem::exists(sysrq_trigger_path))
-            GTEST_SKIP() << "sysrq-trigger is required to wake up the OOM killer";
+    void setUpProgram(unsigned int event_type) {
+        ASSERT_TRUE(event_type < NR_MEM_EVENTS) << "Invalid event type provided";
+
+        int bpf_fd = android::bpf::retrieveProgram(testBpfProgPaths[event_type].c_str());
+        ASSERT_NE(bpf_fd, -1) << "Retrieve bpf program failed with prog path: "
+                              << testBpfProgPaths[event_type];
+        mProgram.reset(bpf_fd);
+
+        ASSERT_GE(mProgram.get(), 0)
+                << testBpfProgPaths[event_type] << " was either not found or inaccessible.";
+    }
+
+    /*
+     * Always call this after `setUpProgram()`, in order to make sure that the
+     * correct `mProgram` was set.
+     */
+    void RunProgram(unsigned int event_type) {
+        errno = 0;
+        switch (event_type) {
+            case MEM_EVENT_OOM_KILL:
+                struct mark_victim_args mark_victim_fake_args;
+                android::bpf::runProgram(mProgram, &mark_victim_fake_args,
+                                         sizeof(mark_victim_fake_args));
+                break;
+            case MEM_EVENT_DIRECT_RECLAIM_BEGIN:
+                struct direct_reclaim_begin_args dr_begin_fake_args;
+                android::bpf::runProgram(mProgram, &dr_begin_fake_args, sizeof(dr_begin_fake_args));
+                break;
+            case MEM_EVENT_DIRECT_RECLAIM_END:
+                struct direct_reclaim_end_args dr_end_fake_args;
+                android::bpf::runProgram(mProgram, &dr_end_fake_args, sizeof(dr_end_fake_args));
+                break;
+            default:
+                FAIL() << "Invalid event type provided";
+        }
+        EXPECT_EQ(errno, 0);
     }
 
   protected:
-    MemEventListener oom_listener;
+    MemEventListener mem_listener = MemEventListener(mem_test_client);
 
-    void TearDown() override { oom_listener.deregisterAllEvents(); }
-
-    bool areOOMEventsEqual(OomKill event1, OomKill event2) {
-        if (event1.pid != event2.pid) return false;
-        if (event1.uid != event2.uid) return false;
-        if (event1.timestamp_ms != event2.timestamp_ms) return false;
-        if (event1.oom_score_adj != event2.oom_score_adj) return false;
-        if (memcmp(event1.process_name, event2.process_name, kTaskCommLen) != 0) return false;
-
-        return true;
+    static void SetUpTestSuite() {
+        if (!isAtLeastKernelVersion(5, 8, 0)) {
+            GTEST_SKIP() << "BPF ring buffers not supported below 5.8";
+        }
     }
 
-    /**
-     * Helper function that will force the OOM killer to claim a [random]
-     * victim. Note that there is no deterministic way to ensure what process
-     * will be claimed by the OOM killer.
-     *
-     * We utilize [sysrq]
-     * (https://www.kernel.org/doc/html/v4.10/admin-guide/sysrq.html)
-     * to help us attempt to wake up the out-of-memory killer.
-     *
-     * @return true if we were able to trigger an OOM event, false otherwise.
+    /*
+     * Helper function to insert mocked data into the testing [bpf] ring buffer.
+     * This will trigger the `listen()` if its registered to the given `event_type`.
      */
-    bool triggerOom() {
-        const MemEvent oom_event_type = MemEvent::OOM_KILL;
-        const std::filesystem::path process_oom_path = "proc/self/oom_score_adj";
+    void setMockDataInRb(mem_event_type_t event_type) {
+        setUpProgram(event_type);
+        RunProgram(event_type);
+    }
 
-        if (!oom_listener.registerEvent(oom_event_type)) {
-            LOG(ERROR) << "Failed registering to oom event";
-            return false;
-        }
+    /*
+     * Test that the `listen()` returns true.
+     * We setup some mocked event data into the testing [bpf] ring-buffer, to make
+     * sure the `listen()` is triggered.
+     */
+    void testListenEvent(unsigned int event_type) {
+        ASSERT_TRUE(event_type < NR_MEM_EVENTS) << "Invalid event type provided";
 
-        // Make sure that we don't kill the parent process
-        if (!android::base::WriteStringToFile("-999", process_oom_path)) {
-            LOG(ERROR) << "Failed writing oom score adj for parent process";
-            return false;
-        }
+        setMockDataInRb(event_type);
 
-        int pid = fork();
-        if (pid < 0) {
-            LOG(ERROR) << "Failed to fork";
-            return false;
-        }
-        if (pid == 0) {
-            /*
-             * We want to make sure that the OOM killer claims our child
-             * process, this way we ensure we don't kill anything critical
-             * (including this test).
-             */
-            if (!android::base::WriteStringToFile("1000", process_oom_path)) {
-                LOG(ERROR) << "Failed writing oom score adj for child process";
-                return false;
-            }
-
-            struct sysinfo info;
-            if (sysinfo(&info) != 0) {
-                LOG(ERROR) << "Failed to get sysinfo";
-                return false;
-            }
-            size_t length = info.freeram / 2;
-
-            // Allocate memory
-            void* addr =
-                    mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-            if (addr == MAP_FAILED) {
-                LOG(ERROR) << "Failed creating mmap";
-                return false;
-            }
-
-            // Fault pages
-            srand(67);
-            for (int i = 0; i < length; i += page_size) memset((char*)addr + i, (char)rand(), 1);
-
-            // Use sysrq-trigger to attempt waking up the OOM killer
-            if (!android::base::WriteStringToFile("f", sysrq_trigger_path)) {
-                LOG(ERROR) << "Failed calling sysrq to trigger OOM killer";
-                return false;
-            }
-            sleep(10);  // Give some time in for sysrq to wake up the OOM killer
-        } else {
-            wait(NULL);  // Wait until child is done
-            MemEvent event_received = oom_listener.listen();
-            if (event_received != oom_event_type) {
-                LOG(ERROR) << "Didn't receive an OOM event";
-                return false;
-            }
-        }
-        total_oom_triggers++;
-        return true;
+        ASSERT_TRUE(mem_listener.listen(5000));  // 5 second timeout
     }
 };
 
-// Tests that depend on `triggerOom()` to succeed
-/**
- * Verify that the `MemEventListener.getOomEvents()` only returns new
- * OOM events after an initial call has already been done.
- * We expect `getOomEvents()` to only read/fetch new events.
+/*
+ * Validate that `listen()` is triggered when we the bpf-rb receives
+ * a OOM event.
  */
-TEST_F(OutOfMemoryTest, MemEventListener_getOomEvents_noDuplicateEvents) {
-    const MemEvent oom_event_type = MemEvent::OOM_KILL;
+TEST_F(MemEventsListenerBpf, listener_bpf_oom_kill) {
+    const mem_event_type_t event_type = MEM_EVENT_OOM_KILL;
 
-    ASSERT_TRUE(oom_listener.registerEvent(oom_event_type));
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    testListenEvent(event_type);
 
-    // Flush out previous OOM events
-    std::vector<OomKill> initial_oom_events;
-    ASSERT_TRUE(oom_listener.getOomEvents(initial_oom_events));
-    initial_oom_events.clear();
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a OOM event";
 
-    ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
-
-    ASSERT_TRUE(oom_listener.getOomEvents(initial_oom_events));
-
-    ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
-
-    std::vector<OomKill> newer_oom_events;
-    ASSERT_TRUE(oom_listener.getOomEvents(newer_oom_events));
-
-    for (int i = 0; i < initial_oom_events.size(); i++) {
-        for (int j = 0; i < newer_oom_events.size(); i++) {
-            ASSERT_FALSE(areOOMEventsEqual(initial_oom_events[i], newer_oom_events[i]))
-                    << "We found a duplicated event";
-        }
-    }
+    /*
+     * This values are set inside the testing prog `memevents_test.h`. These values can't be passed
+     * from the test to the bpf-prog.
+     */
+    ASSERT_EQ(mem_events[0].event_data.oom_kill.pid, mocked_oom_event.event_data.oom_kill.pid)
+            << "Didn't receive expected PID";
+    ASSERT_EQ(mem_events[0].event_data.oom_kill.uid, mocked_oom_event.event_data.oom_kill.uid)
+            << "Didn't receive expected UID";
+    ASSERT_EQ(mem_events[0].event_data.oom_kill.oom_score_adj,
+              mocked_oom_event.event_data.oom_kill.oom_score_adj)
+            << "Didn't receive expected OOM score";
+    ASSERT_EQ(strcmp(mem_events[0].event_data.oom_kill.process_name,
+                     mocked_oom_event.event_data.oom_kill.process_name),
+              0)
+            << "Didn't receive expected process name";
 }
 
-/**
- * Testing the happy flow for listening to out-of-memory (OOM) events.
- *
- * We don't perform a listen here since the `triggerOom()` already does
- * that for us. In the case that we have already triggered an OOM event,
- * through `triggerOom()`, then we just verify that `getOomEvents()` returns
- * us a, non-empty, list of OOM events.
+/*
+ * Validate that `listen()` is triggered when we the bpf-rb receives
+ * a direct reclain start event.
  */
-TEST_F(OutOfMemoryTest, MemEventListener_oomHappyFlow) {
-    const MemEvent oom_event_type = MemEvent::OOM_KILL;
+TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_begin) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
 
-    ASSERT_TRUE(oom_listener.registerEvent(oom_event_type))
-            << "Failed registering OOM events as an event of interest";
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    testListenEvent(event_type);
 
-    if (total_oom_triggers == 0) {
-        ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
-    }
-
-    std::vector<OomKill> oom_events;
-    oom_listener.getOomEvents(oom_events);
-    ASSERT_FALSE(oom_events.empty()) << "We expect at least 1 OOM event";
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim begin event";
 }
 
-/**
- * Verify that when we have two MemEventListeners, listening to the same event
- * of interest (OOM), that they are both reading the same entries.
+/*
+ * Validate that `listen()` is triggered when we the bpf-rb receives
+ * a direct reclain end event.
  */
-TEST_F(OutOfMemoryTest, MemEventListener_oomMultipleListeners) {
-    const MemEvent oom_event_type = MemEvent::OOM_KILL;
+TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_end) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_END;
 
-    MemEventListener listener1;
-    MemEventListener listener2;
-    ASSERT_TRUE(listener1.registerEvent(oom_event_type));
-    ASSERT_TRUE(listener2.registerEvent(oom_event_type));
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    testListenEvent(event_type);
 
-    if (total_oom_triggers == 0) {
-        ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
-    }
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim end event";
+}
 
-    std::vector<OomKill> oom_events1;
-    std::vector<OomKill> oom_events2;
-    ASSERT_TRUE(listener1.getOomEvents(oom_events1));
-    ASSERT_TRUE(listener2.getOomEvents(oom_events2));
+/*
+ * `listen()` should timeout, and return false, when a memory event that
+ * we are not registered for is triggered.
+ */
+TEST_F(MemEventsListenerBpf, no_register_events_listen_fails) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_END;
+    setMockDataInRb(event_type);
+    ASSERT_FALSE(mem_listener.listen(5000));  // 5 second timeout
+}
 
-    ASSERT_EQ(oom_events1.size(), oom_events2.size()) << "OOM events sizes don't match";
+/*
+ * `getMemEvents()` should return an empty list, when a memory event that
+ * we are not registered for, is triggered.
+ */
+TEST_F(MemEventsListenerBpf, getMemEvents_no_register_events) {
+    const mem_event_type_t event_type = MEM_EVENT_OOM_KILL;
+    setMockDataInRb(event_type);
 
-    for (int i = 0; i < oom_events1.size(); i++) {
-        ASSERT_TRUE(areOOMEventsEqual(oom_events1[i], oom_events2[i]))
-                << "OOM events didn't match at index " << i;
-    }
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(mem_events.empty());
 }
 
 int main(int argc, char** argv) {
