@@ -1,7 +1,0 @@
-{
-  "presubmit": [
-    {
-      "name": "memevents_test"
-    }
-  ]
-}

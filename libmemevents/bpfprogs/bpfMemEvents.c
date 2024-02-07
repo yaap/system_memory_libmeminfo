@@ -1,7 +1,7 @@
 /*
  * MM Events - eBPF programs
  *
- * Copyright 2023 The Android Open Source Project
+ * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License
@@ -62,25 +62,6 @@ DEFINE_BPF_PROG("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM, tp_ams)
     read_str((char*)args, args->__data_loc_comm, data->event_data.oom_kill.process_name);
 
     bpf_ams_rb_submit(data);
-
-    return 0;
-}
-
-DEFINE_BPF_PROG("tracepoint/oom/mark_victim/lmkd", AID_ROOT, AID_SYSTEM, tp_lmkd_oom)
-(struct mark_victim_args* args) {
-    unsigned long long timestamp_ns = bpf_ktime_get_ns();
-    struct mem_event_t* data = bpf_lmkd_rb_reserve();
-    if (data == NULL) return 1;
-
-    data->type = MEM_EVENT_OOM_KILL;
-    data->event_data.oom_kill.pid = args->pid;
-    data->event_data.oom_kill.oom_score_adj = args->oom_score_adj;
-    data->event_data.oom_kill.uid = args->uid;
-    data->event_data.oom_kill.timestamp_ms = timestamp_ns / 1000000;  // Convert to milliseconds
-
-    read_str((char*)args, args->__data_loc_comm, data->event_data.oom_kill.process_name);
-
-    bpf_lmkd_rb_submit(data);
 
     return 0;
 }
