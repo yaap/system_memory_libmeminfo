@@ -22,3 +22,15 @@ bpf {
         "-Werror",
     ],
 }
+
+bpf {
+    name: "bpfMemEventsTest.o",
+    srcs: ["bpfMemEventsTest.c"],
+    include_dirs: [
+        "system/memory/libmeminfo/libmemevents/include",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+}
