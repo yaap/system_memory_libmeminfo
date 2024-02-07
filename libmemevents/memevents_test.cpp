@@ -24,6 +24,7 @@
 #include <android-base/logging.h>
 #include <bpf/BpfUtils.h>
 #include <gtest/gtest.h>
+#include <poll.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -118,6 +119,14 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_mem_events) {
     std::vector<mem_event_t> mem_events;
     ASSERT_FALSE(memevent_listener.getMemEvents(mem_events))
             << "Fetching memory events should fail on an older kernel";
+}
+
+/*
+ * The `getRingBufferFd()` API should fail on an older kernel
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_rb_fd) {
+    ASSERT_LT(memevent_listener.getRingBufferFd(), 0)
+            << "Fetching bpf-rb file descriptor should fail on an older kernel";
 }
 
 /*
@@ -313,6 +322,14 @@ TEST_F(MemEventsListenerTest, base_and_oom_events_are_equal) {
             << "MEM_EVENT_BASE should be equal to MEM_EVENT_OOM_KILL";
 }
 
+/*
+ * Validate that `getRingBufferFd()` returns a valid file descriptor.
+ */
+TEST_F(MemEventsListenerTest, get_client_rb_fd) {
+    ASSERT_GE(memevent_listener.getRingBufferFd(), 0)
+            << "Failed to get a valid bpf-rb file descriptor";
+}
+
 class MemEventsListenerBpf : public ::testing::Test {
   private:
     android::base::unique_fd mProgram;
@@ -502,6 +519,40 @@ TEST_F(MemEventsListenerBpf, listen_then_create_event) {
     std::unique_lock lk(mtx);
     cv.wait_for(lk, std::chrono::seconds(10), [&] { return didReceiveEvent; });
     ASSERT_TRUE(didReceiveEvent) << "Listen never received a memory event notification";
+    t.join();
+}
+
+/*
+ * Similarly to `listen_then_create_event`, but instead of using
+ * `listen()`, we want to poll from `getRingBufferFd()` value.
+ */
+TEST_F(MemEventsListenerBpf, getRb_poll_and_create_event) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool didReceiveEvent = false;
+
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+
+    int rb_fd = mem_listener.getRingBufferFd();
+    ASSERT_GE(rb_fd, 0) << "Received invalid file descriptor";
+
+    std::thread t([&] {
+        struct pollfd pfd = {
+                .fd = rb_fd,
+                .events = POLLIN,
+        };
+        int poll_result = poll(&pfd, 1, 10000);
+        std::lock_guard lk(mtx);
+        didReceiveEvent = poll_result > 0;
+        cv.notify_one();
+    });
+
+    setMockDataInRb(event_type);
+
+    std::unique_lock lk(mtx);
+    cv.wait_for(lk, std::chrono::seconds(10), [&] { return didReceiveEvent; });
+    ASSERT_TRUE(didReceiveEvent) << "Poll never received a memory event notification";
     t.join();
 }
 
