@@ -44,6 +44,8 @@ typedef unsigned int mem_event_type_t;
     "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd"
 #define MEM_EVENTS_LMKD_VMSCAN_DR_END_TP \
     "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd"
+#define MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP \
+    "/sys/fs/bpf/prog_bpfMemEventsTest_tracepoint_oom_mark_victim"
 
 /* Struct to collect data from tracepoints */
 struct mem_event_t {
