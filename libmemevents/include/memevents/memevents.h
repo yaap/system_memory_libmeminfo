@@ -47,7 +47,7 @@ class MemBpfRingbuf;
 
 class MemEventListener final {
   public:
-    MemEventListener(MemEventClient client);
+    MemEventListener(MemEventClient client, bool attachTpForTests = false);
     ~MemEventListener();
 
     /**
@@ -100,11 +100,20 @@ class MemEventListener final {
      */
     bool getMemEvents(std::vector<mem_event_t>& mem_events);
 
+    /**
+     * Expose the MemEventClient's ring-buffer file descriptor for polling purposes,
+     * not intended for consumption. To consume use `ConsumeAll()`.
+     *
+     * @return file descriptor (non negative integer), -1 on error.
+     */
+    int getRingBufferFd();
+
   private:
     bool mEventsRegistered[NR_MEM_EVENTS];
     int mNumEventsRegistered;
     MemEventClient mClient;
     std::unique_ptr<MemBpfRingbuf> memBpfRb;
+    bool mAttachTpForTests;
 
     bool isValidEventType(mem_event_type_t event_type) const;
 };

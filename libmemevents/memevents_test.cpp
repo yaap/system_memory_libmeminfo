@@ -13,14 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <bpf/BpfUtils.h>
 #include <gtest/gtest.h>
+#include <poll.h>
+#include <signal.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/sysinfo.h>
 #include <unistd.h>
 
 #include <BpfSyscallWrappers.h>
@@ -40,9 +48,10 @@ static const int page_size = getpagesize();
 static const bool isBpfRingBufferSupported = isAtLeastKernelVersion(5, 8, 0);
 static const std::string bpfRbsPaths[MemEventClient::NR_CLIENTS] = {
         MEM_EVENTS_AMS_RB, MEM_EVENTS_LMKD_RB, MEM_EVENTS_TEST_RB};
-static const std::string testBpfProgPaths[NR_MEM_EVENTS] = {MEM_EVENTS_TEST_OOM_KILL_TP,
-                                                            MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP,
-                                                            MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP};
+static const std::string testBpfSkfilterProgPaths[NR_MEM_EVENTS] = {
+        MEM_EVENTS_TEST_OOM_KILL_TP, MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP,
+        MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP};
+static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
 
 /*
  * Test suite to test on devices that don't support BPF, kernel <= 5.8.
@@ -113,6 +122,14 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_mem_events) {
 }
 
 /*
+ * The `getRingBufferFd()` API should fail on an older kernel
+ */
+TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_rb_fd) {
+    ASSERT_LT(memevent_listener.getRingBufferFd(), 0)
+            << "Fetching bpf-rb file descriptor should fail on an older kernel";
+}
+
+/*
  * Test suite verifies that all the BPF programs and ring buffers are loaded.
  */
 class MemEventsBpfSetupTest : public ::testing::Test {
@@ -143,12 +160,12 @@ TEST_F(MemEventsBpfSetupTest, loaded_lmkd_progs) {
 }
 
 /*
- * Verify that all the memevents test bpf-programs are loaded.
+ * Verify that all the memevents test bpf-skfilter-programs are loaded.
  */
-TEST_F(MemEventsBpfSetupTest, loaded_test_progs) {
+TEST_F(MemEventsBpfSetupTest, loaded_test_skfilter_progs) {
     for (int i = 0; i < NR_MEM_EVENTS; i++) {
-        ASSERT_TRUE(std::filesystem::exists(testBpfProgPaths[i]))
-                << "Failed to find testing bpf-prog: " << testBpfProgPaths[i];
+        ASSERT_TRUE(std::filesystem::exists(testBpfSkfilterProgPaths[i]))
+                << "Failed to find testing bpf-prog: " << testBpfSkfilterProgPaths[i];
     }
 }
 
@@ -184,6 +201,18 @@ class MemEventsListenerTest : public ::testing::Test {
 TEST_F(MemEventsListenerTest, initialize_invalid_client) {
     EXPECT_DEATH(MemEventListener listener(MemEventClient::NR_CLIENTS), "");
     EXPECT_DEATH(MemEventListener listener(static_cast<MemEventClient>(-1)), "");
+}
+
+/*
+ * MemEventListener should fail when a valid, non-testing, client tries to initialize
+ * by passing the optional test flag.
+ */
+TEST_F(MemEventsListenerTest, initialize_valid_client_with_test_flag) {
+    for (int i = 0; i < MemEventClient::TEST_CLIENT; i++) {
+        const MemEventClient valid_client = static_cast<MemEventClient>(i);
+        EXPECT_DEATH(MemEventListener listener(valid_client, true), "")
+                << "Only test client is allowed to set the test flag to true";
+    }
 }
 
 /*
@@ -293,6 +322,14 @@ TEST_F(MemEventsListenerTest, base_and_oom_events_are_equal) {
             << "MEM_EVENT_BASE should be equal to MEM_EVENT_OOM_KILL";
 }
 
+/*
+ * Validate that `getRingBufferFd()` returns a valid file descriptor.
+ */
+TEST_F(MemEventsListenerTest, get_client_rb_fd) {
+    ASSERT_GE(memevent_listener.getRingBufferFd(), 0)
+            << "Failed to get a valid bpf-rb file descriptor";
+}
+
 class MemEventsListenerBpf : public ::testing::Test {
   private:
     android::base::unique_fd mProgram;
@@ -300,13 +337,13 @@ class MemEventsListenerBpf : public ::testing::Test {
     void setUpProgram(unsigned int event_type) {
         ASSERT_TRUE(event_type < NR_MEM_EVENTS) << "Invalid event type provided";
 
-        int bpf_fd = android::bpf::retrieveProgram(testBpfProgPaths[event_type].c_str());
+        int bpf_fd = android::bpf::retrieveProgram(testBpfSkfilterProgPaths[event_type].c_str());
         ASSERT_NE(bpf_fd, -1) << "Retrieve bpf program failed with prog path: "
-                              << testBpfProgPaths[event_type];
+                              << testBpfSkfilterProgPaths[event_type];
         mProgram.reset(bpf_fd);
 
         ASSERT_GE(mProgram.get(), 0)
-                << testBpfProgPaths[event_type] << " was either not found or inaccessible.";
+                << testBpfSkfilterProgPaths[event_type] << " was either not found or inaccessible.";
     }
 
     /*
@@ -343,6 +380,8 @@ class MemEventsListenerBpf : public ::testing::Test {
             GTEST_SKIP() << "BPF ring buffers not supported below 5.8";
         }
     }
+
+    void TearDown() override { mem_listener.deregisterAllEvents(); }
 
     /*
      * Helper function to insert mocked data into the testing [bpf] ring buffer.
@@ -452,6 +491,180 @@ TEST_F(MemEventsListenerBpf, getMemEvents_no_register_events) {
     std::vector<mem_event_t> mem_events;
     ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_TRUE(mem_events.empty());
+}
+
+/*
+ * Verify that the listener receives a notification when:
+ * 1. We start listening
+ * 2. Memory event is added in the bpf ring-buffer
+ * 3. Listening is notified of the new event.
+ */
+TEST_F(MemEventsListenerBpf, listen_then_create_event) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool didReceiveEvent = false;
+
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+
+    std::thread t([&] {
+        bool listen_result = mem_listener.listen(10000);
+        std::lock_guard lk(mtx);
+        didReceiveEvent = listen_result;
+        cv.notify_one();
+    });
+
+    setMockDataInRb(event_type);
+
+    std::unique_lock lk(mtx);
+    cv.wait_for(lk, std::chrono::seconds(10), [&] { return didReceiveEvent; });
+    ASSERT_TRUE(didReceiveEvent) << "Listen never received a memory event notification";
+    t.join();
+}
+
+/*
+ * Similarly to `listen_then_create_event`, but instead of using
+ * `listen()`, we want to poll from `getRingBufferFd()` value.
+ */
+TEST_F(MemEventsListenerBpf, getRb_poll_and_create_event) {
+    const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool didReceiveEvent = false;
+
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+
+    int rb_fd = mem_listener.getRingBufferFd();
+    ASSERT_GE(rb_fd, 0) << "Received invalid file descriptor";
+
+    std::thread t([&] {
+        struct pollfd pfd = {
+                .fd = rb_fd,
+                .events = POLLIN,
+        };
+        int poll_result = poll(&pfd, 1, 10000);
+        std::lock_guard lk(mtx);
+        didReceiveEvent = poll_result > 0;
+        cv.notify_one();
+    });
+
+    setMockDataInRb(event_type);
+
+    std::unique_lock lk(mtx);
+    cv.wait_for(lk, std::chrono::seconds(10), [&] { return didReceiveEvent; });
+    ASSERT_TRUE(didReceiveEvent) << "Poll never received a memory event notification";
+    t.join();
+}
+
+class MemoryPressureTest : public ::testing::Test {
+  public:
+    static void SetUpTestSuite() {
+        if (!isAtLeastKernelVersion(5, 8, 0))
+            GTEST_SKIP() << "BPF ring buffers not supported below 5.8";
+
+        if (!std::filesystem::exists(sysrq_trigger_path))
+            GTEST_SKIP() << "sysrq-trigger is required to wake up the OOM killer";
+
+        ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP))
+                << "Failed to find test bpf program: " << MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP;
+    }
+
+  protected:
+    MemEventListener mem_listener = MemEventListener(mem_test_client, true);
+
+    void TearDown() override { mem_listener.deregisterAllEvents(); }
+
+    /**
+     * Helper function that will force the OOM killer to claim a [random]
+     * victim. Note that there is no deterministic way to ensure what process
+     * will be claimed by the OOM killer.
+     *
+     * We utilize [sysrq]
+     * (https://www.kernel.org/doc/html/v4.10/admin-guide/sysrq.html)
+     * to help us attempt to wake up the out-of-memory killer.
+     *
+     * @return true if we were able to trigger an OOM event, false otherwise.
+     */
+    bool triggerOom() {
+        const std::filesystem::path process_oom_path = "proc/self/oom_score_adj";
+
+        // Make sure that we don't kill the parent process
+        if (!android::base::WriteStringToFile("-999", process_oom_path)) {
+            LOG(ERROR) << "Failed writing oom score adj for parent process";
+            return false;
+        }
+
+        int pid = fork();
+        if (pid < 0) {
+            LOG(ERROR) << "Failed to fork";
+            return false;
+        }
+        if (pid == 0) {
+            /*
+             * We want to make sure that the OOM killer claims our child
+             * process, this way we ensure we don't kill anything critical
+             * (including this test).
+             */
+            if (!android::base::WriteStringToFile("1000", process_oom_path)) {
+                LOG(ERROR) << "Failed writing oom score adj for child process";
+                return false;
+            }
+
+            struct sysinfo info;
+            if (sysinfo(&info) != 0) {
+                LOG(ERROR) << "Failed to get sysinfo";
+                return false;
+            }
+            size_t length = info.freeram / 2;
+
+            // Allocate memory
+            void* addr =
+                    mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+            if (addr == MAP_FAILED) {
+                LOG(ERROR) << "Failed creating mmap";
+                return false;
+            }
+
+            // Fault pages
+            srand(67);
+            for (int i = 0; i < length; i += page_size) memset((char*)addr + i, (char)rand(), 1);
+
+            // Use sysrq-trigger to attempt waking up the OOM killer
+            if (!android::base::WriteStringToFile("f", sysrq_trigger_path)) {
+                LOG(ERROR) << "Failed calling sysrq to trigger OOM killer";
+                return false;
+            }
+            sleep(10);  // Give some time in for sysrq to wake up the OOM killer
+        } else {
+            /*
+             * Wait for child process to finish, this will prevent scenario where the `listen()`
+             * is called by the parent, but the child hasn't even been scheduled to run yet.
+             */
+            wait(NULL);
+            if (!mem_listener.listen(2000)) {
+                LOG(ERROR) << "Failed to receive a memory event";
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+/**
+ * End-to-end test for listening, and consuming, out-of-memory (OOM) events.
+ *
+ * We don't perform a listen here since the `triggerOom()` already does
+ * that for us.
+ */
+TEST_F(MemoryPressureTest, oom_e2e_flow) {
+    ASSERT_TRUE(mem_listener.registerEvent(MEM_EVENT_OOM_KILL))
+            << "Failed registering OOM events as an event of interest";
+
+    ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
+
+    std::vector<mem_event_t> oom_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(oom_events)) << "Failed to fetch memory oom events";
+    ASSERT_FALSE(oom_events.empty()) << "We expect at least 1 OOM event";
 }
 
 int main(int argc, char** argv) {

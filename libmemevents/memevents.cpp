@@ -40,7 +40,7 @@ namespace bpf {
 namespace memevents {
 
 static const std::string kClientRingBuffers[MemEventClient::NR_CLIENTS] = {
-        MEM_EVENTS_AMS_RB, MEM_EVENTS_TEST_RB, MEM_EVENTS_TEST_RB};
+        MEM_EVENTS_AMS_RB, MEM_EVENTS_LMKD_RB, MEM_EVENTS_TEST_RB};
 
 class MemBpfRingbuf : public BpfRingbufBase {
   public:
@@ -82,7 +82,7 @@ struct MemBpfAttachment {
 };
 
 // clang-format off
-static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {{
+static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
     // AMS
     {
         {
@@ -103,9 +103,17 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {{
             .tpGroup = "vmscan",
             .tpEvent = "mm_vmscan_direct_reclaim_end"
         },
-    }
+    },
+    // MemEventsTest
+    {
+        {
+            .prog = MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP,
+            .tpGroup = "oom",
+            .tpEvent = "mark_victim"
+        },
+    },
     // ... next service/client
-}};
+};
 // clang-format on
 
 /**
@@ -122,15 +130,26 @@ bool MemEventListener::isValidEventType(mem_event_type_t event_type) const {
 
 // Public methods
 
-MemEventListener::MemEventListener(MemEventClient client) {
+MemEventListener::MemEventListener(MemEventClient client, bool attachTpForTests) {
     if (client >= MemEventClient::NR_CLIENTS || client < MemEventClient::BASE) {
         LOG(ERROR) << "memevent listener failed to initialize, invalid client: " << client;
         std::abort();
     }
 
     mClient = client;
+    mAttachTpForTests = attachTpForTests;
     std::fill_n(mEventsRegistered, NR_MEM_EVENTS, false);
     mNumEventsRegistered = 0;
+
+    /*
+     * This flag allows for the MemoryPressureTest suite to hook into a BPF tracepoint
+     * and NOT allowing, this testing instance, to skip any skip internal calls.
+     * This flag is only allowed to be set for a testing instance, not for normal clients.
+     */
+    if (mClient != MemEventClient::TEST_CLIENT && attachTpForTests) {
+        LOG(ERROR) << "memevent listener failed to initialize, invalid configuration";
+        std::abort();
+    }
 
     memBpfRb = std::make_unique<MemBpfRingbuf>();
     if (auto status = memBpfRb->Initialize(kClientRingBuffers[client].c_str()); !status.ok()) {
@@ -166,7 +185,7 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
         return true;
     }
 
-    if (mClient == MemEventClient::TEST_CLIENT) {
+    if (mClient == MemEventClient::TEST_CLIENT && !mAttachTpForTests) {
         mEventsRegistered[event_type] = true;
         mNumEventsRegistered++;
         return true;
@@ -227,7 +246,7 @@ bool MemEventListener::deregisterEvent(mem_event_type_t event_type) {
 
     if (!mEventsRegistered[event_type]) return true;
 
-    if (mClient == MemEventClient::TEST_CLIENT) {
+    if (mClient == MemEventClient::TEST_CLIENT && !mAttachTpForTests) {
         mEventsRegistered[event_type] = false;
         mNumEventsRegistered--;
         return true;
@@ -272,6 +291,14 @@ bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
     }
 
     return true;
+}
+
+int MemEventListener::getRingBufferFd() {
+    if (!memBpfRb) {
+        LOG(ERROR) << "memevent failed getting ring-buffer fd, failure to initialize";
+        return -1;
+    }
+    return memBpfRb->getRingBufFd();
 }
 
 }  // namespace memevents
