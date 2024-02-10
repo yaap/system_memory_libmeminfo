@@ -100,6 +100,14 @@ class MemEventListener final {
      */
     bool getMemEvents(std::vector<mem_event_t>& mem_events);
 
+    /**
+     * Expose the MemEventClient's ring-buffer file descriptor for polling purposes,
+     * not intended for consumption. To consume use `ConsumeAll()`.
+     *
+     * @return file descriptor (non negative integer), -1 on error.
+     */
+    int getRingBufferFd();
+
   private:
     bool mEventsRegistered[NR_MEM_EVENTS];
     int mNumEventsRegistered;
