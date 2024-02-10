@@ -293,6 +293,14 @@ bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
     return true;
 }
 
+int MemEventListener::getRingBufferFd() {
+    if (!memBpfRb) {
+        LOG(ERROR) << "memevent failed getting ring-buffer fd, failure to initialize";
+        return -1;
+    }
+    return memBpfRb->getRingBufFd();
+}
+
 }  // namespace memevents
 }  // namespace bpf
 }  // namespace android
