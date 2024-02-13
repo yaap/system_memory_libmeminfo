@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <functional>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -79,6 +80,7 @@ struct MemBpfAttachment {
     const std::string prog;
     const std::string tpGroup;
     const std::string tpEvent;
+    const mem_event_type_t event_type;
 };
 
 // clang-format off
@@ -88,7 +90,8 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
         {
             .prog = MEM_EVENTS_AMS_OOM_MARK_VICTIM_TP,
             .tpGroup = "oom",
-            .tpEvent = "mark_victim"
+            .tpEvent = "mark_victim",
+            .event_type = MEM_EVENT_OOM_KILL
         },
     },
     // LMKD
@@ -96,12 +99,14 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
         {
             .prog = MEM_EVENTS_LMKD_VMSCAN_DR_BEGIN_TP,
             .tpGroup = "vmscan",
-            .tpEvent = "mm_vmscan_direct_reclaim_begin"
+            .tpEvent = "mm_vmscan_direct_reclaim_begin",
+            .event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN
         },
         {
             .prog = MEM_EVENTS_LMKD_VMSCAN_DR_END_TP,
             .tpGroup = "vmscan",
-            .tpEvent = "mm_vmscan_direct_reclaim_end"
+            .tpEvent = "mm_vmscan_direct_reclaim_end",
+            .event_type = MEM_EVENT_DIRECT_RECLAIM_END
         },
     },
     // MemEventsTest
@@ -109,12 +114,23 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
         {
             .prog = MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP,
             .tpGroup = "oom",
-            .tpEvent = "mark_victim"
+            .tpEvent = "mark_victim",
+            .event_type = MEM_EVENT_OOM_KILL
         },
     },
     // ... next service/client
 };
 // clang-format on
+
+static std::optional<MemBpfAttachment> findAttachment(mem_event_type_t event_type,
+                                                      MemEventClient client) {
+    auto it = std::find_if(attachments[client].begin(), attachments[client].end(),
+                           [event_type](const MemBpfAttachment memBpfAttch) {
+                               return memBpfAttch.event_type == event_type;
+                           });
+    if (it == attachments[client].end()) return std::nullopt;
+    return it[0];
+}
 
 /**
  * Helper function that determines if an event type is valid.
@@ -191,7 +207,8 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
         return true;
     }
 
-    if (event_type >= attachments[mClient].size()) {
+    const std::optional<MemBpfAttachment> maybeAttachment = findAttachment(event_type, mClient);
+    if (!maybeAttachment.has_value()) {
         /*
          * Not all clients have access to the same tracepoints, for example,
          * AMS doesn't have a bpf prog for the direct reclaim start/end tracepoints.
@@ -201,7 +218,7 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
         return false;
     }
 
-    const auto attachment = attachments[mClient][event_type];
+    const auto attachment = maybeAttachment.value();
     int bpf_prog_fd = retrieveProgram(attachment.prog.c_str());
     if (bpf_prog_fd < 0) {
         PLOG(ERROR) << "memevent failed to retrieve pinned program from: " << attachment.prog;
@@ -252,7 +269,18 @@ bool MemEventListener::deregisterEvent(mem_event_type_t event_type) {
         return true;
     }
 
-    const auto attachment = attachments[mClient][event_type];
+    const std::optional<MemBpfAttachment> maybeAttachment = findAttachment(event_type, mClient);
+    if (!maybeAttachment.has_value()) {
+        /*
+         * We never expect to get here since the listener wouldn't have been to register this
+         * `event_type` in the first place.
+         */
+        LOG(ERROR) << "memevent failed deregister event " << event_type
+                   << ", not tp attachment found";
+        return false;
+    }
+
+    const auto attachment = maybeAttachment.value();
     if (bpf_detach_tracepoint(attachment.tpGroup.c_str(), attachment.tpEvent.c_str()) < 0) {
         PLOG(ERROR) << "memevent failed to deregister event " << event_type << " from bpf prog to "
                     << attachment.tpGroup << "/" << attachment.tpEvent << " tracepoint";
