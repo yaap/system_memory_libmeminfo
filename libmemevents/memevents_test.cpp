@@ -648,6 +648,34 @@ class MemoryPressureTest : public ::testing::Test {
         }
         return true;
     }
+
+    /*
+     * This wrapper function exists to facilitate the use of ASSERT, with
+     * non-void helper functions, that want to use `ReadFileToString()`.
+     * We can only assert on void functions.
+     */
+    void fileToString(const std::string& file_path, std::string* content) {
+        ASSERT_TRUE(android::base::ReadFileToString(file_path, content))
+                << "Failed to read file: " << file_path;
+    }
+
+    /*
+     * Check if the current device supports the new oom/mark_victim tracepoints.
+     * The original oom/mark_victim tracepoint only supports the `pid` field, while
+     * the newer version supports: pid, uid, and comm.
+     */
+    bool isUpdatedMarkVictimTpSupported() {
+        const std::string path_mark_victim_format =
+                "/sys/kernel/tracing/events/oom/mark_victim/format";
+        std::string mark_victim_format_content;
+        fileToString(path_mark_victim_format, &mark_victim_format_content);
+
+        /*
+         * We check for `uid` only since the format file has several occurrences
+         * of words with `comm` in them.
+         */
+        return mark_victim_format_content.find("uid") != std::string::npos;
+    }
 };
 
 /**
@@ -657,6 +685,9 @@ class MemoryPressureTest : public ::testing::Test {
  * that for us.
  */
 TEST_F(MemoryPressureTest, oom_e2e_flow) {
+    if (!isUpdatedMarkVictimTpSupported())
+        GTEST_SKIP() << "New oom/mark_victim fields not supported";
+
     ASSERT_TRUE(mem_listener.registerEvent(MEM_EVENT_OOM_KILL))
             << "Failed registering OOM events as an event of interest";
 
