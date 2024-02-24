@@ -38,6 +38,11 @@ DEFINE_BPF_PROG("tracepoint/oom/mark_victim", AID_ROOT, AID_SYSTEM, tp_ams)
     data->event_data.oom_kill.oom_score_adj = args->oom_score_adj;
     data->event_data.oom_kill.uid = args->uid;
     data->event_data.oom_kill.timestamp_ms = timestamp_ns / 1000000;  // Convert to milliseconds
+    data->event_data.oom_kill.total_vm_kb = args->total_vm;
+    data->event_data.oom_kill.anon_rss_kb = args->anon_rss;
+    data->event_data.oom_kill.file_rss_kb = args->file_rss;
+    data->event_data.oom_kill.shmem_rss_kb = args->shmem_rss;
+    data->event_data.oom_kill.pgtables_kb = args->pgtables;
 
     read_str((char*)args, args->__data_loc_comm, data->event_data.oom_kill.process_name,
              MEM_EVENT_PROC_NAME_LEN);
@@ -62,6 +67,13 @@ DEFINE_BPF_PROG_KVER("skfilter/oom_kill", AID_ROOT, AID_ROOT, tp_memevents_test_
     data->event_data.oom_kill.pid = mocked_oom_event.event_data.oom_kill.pid;
     data->event_data.oom_kill.uid = mocked_oom_event.event_data.oom_kill.uid;
     data->event_data.oom_kill.oom_score_adj = mocked_oom_event.event_data.oom_kill.oom_score_adj;
+    data->event_data.oom_kill.timestamp_ms = mocked_oom_event.event_data.oom_kill.timestamp_ms;
+    data->event_data.oom_kill.total_vm_kb = mocked_oom_event.event_data.oom_kill.total_vm_kb;
+    data->event_data.oom_kill.anon_rss_kb = mocked_oom_event.event_data.oom_kill.anon_rss_kb;
+    data->event_data.oom_kill.file_rss_kb = mocked_oom_event.event_data.oom_kill.file_rss_kb;
+    data->event_data.oom_kill.shmem_rss_kb = mocked_oom_event.event_data.oom_kill.shmem_rss_kb;
+    data->event_data.oom_kill.pgtables_kb = mocked_oom_event.event_data.oom_kill.pgtables_kb;
+
     strncpy(data->event_data.oom_kill.process_name,
             mocked_oom_event.event_data.oom_kill.process_name, 13);
 
