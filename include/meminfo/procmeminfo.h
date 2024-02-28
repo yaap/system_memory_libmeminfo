@@ -28,7 +28,7 @@
 namespace android {
 namespace meminfo {
 
-using VmaCallback = std::function<void(const Vma&)>;
+using VmaCallback = std::function<bool(Vma&)>;
 
 class ProcMemInfo final {
     // Per-process memory accounting

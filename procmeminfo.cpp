@@ -206,6 +206,7 @@ const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect
                 add_mem_usage(&usage_, vma.usage);
             }
         }
+        return true;
     };
     if (path.empty() && !ForEachVma(collect_vmas)) {
         LOG(ERROR) << "Failed to read smaps for Process " << pid_;
@@ -259,7 +260,9 @@ bool ProcMemInfo::ForEachExistingVma(const VmaCallback& callback) {
         return false;
     }
     for (auto& vma : maps_) {
-        callback(vma);
+        if (!callback(vma)) {
+            return false;
+        }
     }
     return true;
 }
@@ -582,7 +585,10 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
             }
 
             // Done collecting stats, make the call back
-            callback(vma);
+            if (!callback(vma)) {
+                free(line);
+                return false;
+            }
             parsing_vma = false;
         }
 
@@ -608,7 +614,10 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
             parsing_vma = true;
         } else {
             // Done collecting stats, make the call back
-            callback(vma);
+            if (!callback(vma)) {
+                free(line);
+                return false;
+            }
         }
     }
 
@@ -616,7 +625,9 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
     free(line);
 
     if (parsing_vma) {
-        callback(vma);
+        if (!callback(vma)) {
+            return false;
+        }
     }
 
     return true;
