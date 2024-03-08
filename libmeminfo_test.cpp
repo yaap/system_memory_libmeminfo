@@ -388,7 +388,10 @@ TEST(ProcMemInfo, ForEachExistingVmaTest) {
     // Populate maps_.
     proc_mem.Smaps(path);
     std::vector<Vma> vmas;
-    auto collect_vmas = [&](const Vma& v) { vmas.push_back(v); };
+    auto collect_vmas = [&](const Vma& v) {
+        vmas.push_back(v);
+        return true;
+    };
     EXPECT_TRUE(proc_mem.ForEachExistingVma(collect_vmas));
 
     // The size of vmas is not checked because Smaps() will return 5 vmas on x86
@@ -536,7 +539,10 @@ TEST(ProcMemInfo, ForEachVmaFromFile_SmapsTest) {
     ProcMemInfo proc_mem(pid);
 
     std::vector<Vma> vmas;
-    auto collect_vmas = [&](const Vma& v) { vmas.push_back(v); };
+    auto collect_vmas = [&](const Vma& v) {
+        vmas.push_back(v);
+        return true;
+    };
     ASSERT_TRUE(ForEachVmaFromFile(path, collect_vmas));
 
     // We should get a total of 6 vmas
@@ -680,7 +686,10 @@ TEST(ProcMemInfo, ForEachVmaFromFile_MapsTest) {
     ProcMemInfo proc_mem(pid);
 
     std::vector<Vma> vmas;
-    auto collect_vmas = [&](const Vma& v) { vmas.push_back(v); };
+    auto collect_vmas = [&](const Vma& v) {
+        vmas.push_back(v);
+        return true;
+    };
     ASSERT_TRUE(ForEachVmaFromFile(path, collect_vmas, false));
 
     // We should get a total of 6 vmas

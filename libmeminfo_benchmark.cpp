@@ -553,7 +553,10 @@ static void BM_MapsVmaParsing_ForEachVmaFromMaps(benchmark::State& state) {
     state.ResumeTiming();
 
     std::vector<Vma> vmas;
-    auto vmaCollectorCb = [&](const Vma& vma) { vmas.push_back(vma); };
+    auto vmaCollectorCb = [&](const Vma& vma) {
+        vmas.push_back(vma);
+        return true;
+    };
     for (int i = 0; i < 100000; ++i) {
         meminfo.ForEachVmaFromMaps(vmaCollectorCb);
 
@@ -571,7 +574,10 @@ static void BM_MapsVmaParsing_ForEachVma(benchmark::State& state) {
     state.ResumeTiming();
 
     std::vector<Vma> vmas;
-    auto vmaCollectorCb = [&](const Vma& vma) { vmas.push_back(vma); };
+    auto vmaCollectorCb = [&](const Vma& vma) {
+        vmas.push_back(vma);
+        return true;
+    };
     for (int i = 0; i < 100000; ++i) {
         meminfo.ForEachVma(vmaCollectorCb, false);
 
