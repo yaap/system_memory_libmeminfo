@@ -59,14 +59,17 @@ class ProcMemInfo final {
     // called, this function will fill in usage stats for all vmas in 'maps_'.
     bool GetUsageStats(bool get_wss, bool use_pageidle = false, bool update_mem_usage = true);
 
-    // Collect all 'vma' or 'maps' from /proc/<pid>/smaps and store them in 'maps_'. Only
-    // information available from smaps fields will be read, so 'swap_offsets_' will not
-    // be populated. If 'collect_usage' is 'true', this method will populate 'usage_' as
-    // vmas are being collected. Returns a constant reference to the vma vector after the
-    // collection is done.
+    // Collect all 'vma' or 'maps' from /proc/<pid>/smaps and store them in 'maps_'.
+    // If 'collect_usage' is 'true', this method will populate 'usage_' as vmas are being
+    // collected. If 'collect_swap_offsets' is 'true', pagemap will be read in order to
+    // populate 'swap_offsets_'.
+    //
+    // Returns a constant reference to the vma vector after the collection is
+    // done.
     //
     // Each 'struct Vma' is *fully* populated by this method (unlike SmapsOrRollup).
-    const std::vector<Vma>& Smaps(const std::string& path = "", bool collect_usage = false);
+    const std::vector<Vma>& Smaps(const std::string& path = "", bool collect_usage = false,
+                                  bool collect_swap_offsets = false);
 
     // If 'use_smaps' is 'true' this method reads /proc/<pid>/smaps and calls the callback()
     // for each vma or map that it finds, else if 'use_smaps' is false /proc/<pid>/maps is
@@ -131,7 +134,7 @@ class ProcMemInfo final {
     bool ReadMaps(bool get_wss, bool use_pageidle = false, bool get_usage_stats = true,
                   bool update_mem_usage = true);
     bool ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle,
-                      bool update_mem_usage);
+                      bool update_mem_usage, bool update_swap_usage);
 
     pid_t pid_;
     bool get_wss_;
