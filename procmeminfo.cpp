@@ -193,20 +193,47 @@ const std::vector<Vma>& ProcMemInfo::MapsWithoutUsageStats() {
     return maps_;
 }
 
-const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect_usage) {
+static int GetPagemapFd(pid_t pid) {
+    std::string pagemap_file = ::android::base::StringPrintf("/proc/%d/pagemap", pid);
+    int fd = TEMP_FAILURE_RETRY(open(pagemap_file.c_str(), O_RDONLY | O_CLOEXEC));
+    if (fd == -1) {
+        PLOG(ERROR) << "Failed to open " << pagemap_file;
+    }
+    return fd;
+}
+
+const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect_usage,
+                                           bool collect_swap_offsets) {
     if (!maps_.empty()) {
         return maps_;
     }
 
-    auto collect_vmas = [&](const Vma& vma) {
+    ::android::base::unique_fd pagemap_fd;
+    if (collect_swap_offsets) {
+        pagemap_fd = ::android::base::unique_fd(GetPagemapFd(pid_));
+        if (pagemap_fd == -1) {
+            LOG(ERROR) << "Failed to open pagemap for pid " << pid_ << " during Smaps()";
+            return maps_;
+        }
+    }
+
+    auto collect_vmas = [&](Vma& vma) {
         if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), vma.name) ==
                 g_excluded_vmas.end()) {
             maps_.emplace_back(vma);
             if (collect_usage) {
                 add_mem_usage(&usage_, vma.usage);
             }
+            if (collect_swap_offsets &&
+                !ReadVmaStats(pagemap_fd.get(), vma, false, false, false, false)) {
+                LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start
+                           << "-" << vma.end << "]";
+                return false;
+            }
         }
+        return true;
     };
+
     if (path.empty() && !ForEachVma(collect_vmas)) {
         LOG(ERROR) << "Failed to read smaps for Process " << pid_;
         maps_.clear();
@@ -259,7 +286,9 @@ bool ProcMemInfo::ForEachExistingVma(const VmaCallback& callback) {
         return false;
     }
     for (auto& vma : maps_) {
-        callback(vma);
+        if (!callback(vma)) {
+            return false;
+        }
     }
     return true;
 }
@@ -327,7 +356,7 @@ const std::vector<uint64_t>& ProcMemInfo::SwapOffsets() {
         return swap_offsets_;
     }
 
-    if (maps_.empty() && !ReadMaps(get_wss_, false, true, true)) {
+    if (maps_.empty() && !ReadMaps(get_wss_, false, true, false)) {
         LOG(ERROR) << "Failed to get swap offsets for Process " << pid_;
     }
 
@@ -362,16 +391,8 @@ bool ProcMemInfo::PageMap(const Vma& vma, std::vector<uint64_t>* pagemap) {
     return true;
 }
 
-static int GetPagemapFd(pid_t pid) {
-    std::string pagemap_file = ::android::base::StringPrintf("/proc/%d/pagemap", pid);
-    int fd = TEMP_FAILURE_RETRY(open(pagemap_file.c_str(), O_RDONLY | O_CLOEXEC));
-    if (fd == -1) {
-        PLOG(ERROR) << "Failed to open " << pagemap_file;
-    }
-    return fd;
-}
-
-bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats, bool swap_only) {
+bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats,
+                           bool update_mem_usage) {
     // Each object reads /proc/<pid>/maps only once. This is done to make sure programs that are
     // running for the lifetime of the system can recycle the objects and don't have to
     // unnecessarily retain and update this object in memory (which can get significantly large).
@@ -401,21 +422,21 @@ bool ProcMemInfo::ReadMaps(bool get_wss, bool use_pageidle, bool get_usage_stats
         return true;
     }
 
-    if (!GetUsageStats(get_wss, use_pageidle, swap_only)) {
+    if (!GetUsageStats(get_wss, use_pageidle, update_mem_usage)) {
         maps_.clear();
         return false;
     }
     return true;
 }
 
-bool ProcMemInfo::GetUsageStats(bool get_wss, bool use_pageidle, bool swap_only) {
+bool ProcMemInfo::GetUsageStats(bool get_wss, bool use_pageidle, bool update_mem_usage) {
     ::android::base::unique_fd pagemap_fd(GetPagemapFd(pid_));
     if (pagemap_fd == -1) {
         return false;
     }
 
     for (auto& vma : maps_) {
-        if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss, use_pageidle, swap_only)) {
+        if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss, use_pageidle, update_mem_usage, true)) {
             LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start << "-"
                        << vma.end << "]";
             return false;
@@ -432,7 +453,7 @@ bool ProcMemInfo::FillInVmaStats(Vma& vma, bool use_kb) {
         return false;
     }
 
-    if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss_, false, false)) {
+    if (!ReadVmaStats(pagemap_fd.get(), vma, get_wss_, false, true, true)) {
         LOG(ERROR) << "Failed to read page map for vma " << vma.name << "[" << vma.start << "-"
                    << vma.end << "]";
         return false;
@@ -444,7 +465,7 @@ bool ProcMemInfo::FillInVmaStats(Vma& vma, bool use_kb) {
 }
 
 bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_pageidle,
-                               bool swap_only) {
+                               bool update_mem_usage, bool update_swap_usage) {
     PageAcct& pinfo = PageAcct::Instance();
     if (get_wss && use_pageidle && !pinfo.InitPageAcct(true)) {
         LOG(ERROR) << "Failed to init idle page accounting";
@@ -452,8 +473,8 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
     }
 
     uint64_t pagesz_kb = getpagesize() / 1024;
-    size_t num_pages = (vma.end - vma.start) / (pagesz_kb * 1024);
-    size_t first_page = vma.start / (pagesz_kb * 1024);
+    size_t num_pages = (vma.end - vma.start) / getpagesize();
+    size_t first_page = vma.start / getpagesize();
 
     std::vector<uint64_t> page_cache;
     size_t cur_page_cache_index = 0;
@@ -491,13 +512,14 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
         if (!PAGE_PRESENT(page_info) && !PAGE_SWAPPED(page_info)) continue;
 
         if (PAGE_SWAPPED(page_info)) {
-            vma.usage.swap += pagesz_kb;
+            if (update_swap_usage) {
+                vma.usage.swap += pagesz_kb;
+            }
             swap_offsets_.emplace_back(PAGE_SWAP_OFFSET(page_info));
             continue;
         }
 
-        if (swap_only)
-            continue;
+        if (!update_mem_usage) continue;
 
         uint64_t page_frame = PAGE_PFN(page_info);
         uint64_t cur_page_flags;
@@ -582,7 +604,10 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
             }
 
             // Done collecting stats, make the call back
-            callback(vma);
+            if (!callback(vma)) {
+                free(line);
+                return false;
+            }
             parsing_vma = false;
         }
 
@@ -608,7 +633,10 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
             parsing_vma = true;
         } else {
             // Done collecting stats, make the call back
-            callback(vma);
+            if (!callback(vma)) {
+                free(line);
+                return false;
+            }
         }
     }
 
@@ -616,7 +644,9 @@ bool ForEachVmaFromFile(const std::string& path, const VmaCallback& callback,
     free(line);
 
     if (parsing_vma) {
-        callback(vma);
+        if (!callback(vma)) {
+            return false;
+        }
     }
 
     return true;
