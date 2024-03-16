@@ -45,7 +45,7 @@ std::unique_ptr<DmabufOutputHelper> outputHelper;
 
 [[noreturn]] static void usage(int exit_status) {
     fprintf(stderr,
-            "Usage: %s [-abh] [per-process/per-buffer stats] [-o output type]\n"
+            "Usage: %s [-abh] [PID] [-o <raw|csv>]\n"
             "-a\t show all dma buffers (ion) in big table, [buffer x process] grid \n"
             "-b\t show DMA-BUF per-buffer, per-exporter and per-device statistics \n"
             "-o\t [raw][csv] print output in the specified format.\n"
