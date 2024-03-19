@@ -69,6 +69,10 @@ class MemEventListenerUnsupportedKernel : public ::testing::Test {
         }
     }
 
+    void SetUp() override {
+        ASSERT_FALSE(memevent_listener.ok()) << "BPF ring buffer manager shouldn't initialize";
+    }
+
     void TearDown() override { memevent_listener.deregisterAllEvents(); }
 };
 
@@ -190,6 +194,11 @@ class MemEventsListenerTest : public ::testing::Test {
         }
     }
 
+    void SetUp() override {
+        ASSERT_TRUE(memevent_listener.ok())
+                << "Memory listener failed to initialize bpf ring buffer manager";
+    }
+
     void TearDown() override { memevent_listener.deregisterAllEvents(); }
 };
 
@@ -226,6 +235,7 @@ TEST_F(MemEventsListenerTest, initialize_valid_clients) {
         listener = std::make_unique<MemEventListener>(client);
         ASSERT_TRUE(listener) << "MemEventListener failed to initialize with valid client value: "
                               << client;
+        ASSERT_TRUE(listener->ok()) << "MemEventListener failed to initialize with bpf rb manager";
     }
 }
 
@@ -394,6 +404,10 @@ class MemEventsListenerBpf : public ::testing::Test {
         if (!isAtLeastKernelVersion(5, 8, 0)) {
             GTEST_SKIP() << "BPF ring buffers not supported below 5.8";
         }
+    }
+
+    void SetUp() override {
+        ASSERT_TRUE(mem_listener.ok()) << "Listener failed to initialize bpf rb manager";
     }
 
     void TearDown() override { mem_listener.deregisterAllEvents(); }
@@ -586,6 +600,10 @@ class MemoryPressureTest : public ::testing::Test {
 
   protected:
     MemEventListener mem_listener = MemEventListener(mem_test_client, true);
+
+    void SetUp() override {
+        ASSERT_TRUE(mem_listener.ok()) << "listener failed to initialize bpf ring buffer manager";
+    }
 
     void TearDown() override { mem_listener.deregisterAllEvents(); }
 

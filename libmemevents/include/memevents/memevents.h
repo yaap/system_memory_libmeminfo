@@ -47,8 +47,26 @@ class MemBpfRingbuf;
 
 class MemEventListener final {
   public:
+    /*
+     * MemEventListener will `std::abort` when failing to initialize
+     * the bpf ring buffer manager, on a bpf-rb supported kernel.
+     *
+     * If running on a kernel that doesn't support bpf-rb, the listener
+     * will initialize in an invalid state, preventing it from making
+     * any actions/calls.
+     * To check if the listener initialized correctly use `ok()`.
+     */
     MemEventListener(MemEventClient client, bool attachTpForTests = false);
     ~MemEventListener();
+
+    /**
+     * Check if the listener was initialized correctly, with a valid bpf
+     * ring buffer manager on a bpf-rb supported kernel.
+     *
+     * @return true if initialized with a valid bpf rb manager, false
+     * otherwise.
+     */
+    bool ok();
 
     /**
      * Registers the requested memory event to the listener.
