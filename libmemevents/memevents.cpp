@@ -225,9 +225,17 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
         return false;
     }
 
-    // Attach the bpf program to the tracepoint
+    /*
+     * Attach the bpf program to the tracepoint
+     *
+     * We get an errno `EEXIST` when a client attempts to register back to its events of interest.
+     * This occurs because the latest implementation of `bpf_detach_tracepoint` doesn't actually
+     * detach anything.
+     * https://github.com/iovisor/bcc/blob/7d350d90b638ddaf2c137a609b542e997597910a/src/cc/libbpf.c#L1495-L1501
+     */
     if (bpf_attach_tracepoint(bpf_prog_fd, attachment.tpGroup.c_str(), attachment.tpEvent.c_str()) <
-        0) {
+                0 &&
+        errno != EEXIST) {
         PLOG(ERROR) << "memevent failed to attach bpf program to " << attachment.tpGroup << "/"
                     << attachment.tpEvent << " tracepoint";
         return false;
