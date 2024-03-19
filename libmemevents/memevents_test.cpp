@@ -274,6 +274,21 @@ TEST_F(MemEventsListenerTest, listen_no_registered_events) {
 }
 
 /*
+ * Verify that we can register to an event after deregistering from it
+ */
+TEST_F(MemEventsListenerTest, register_after_deregister_event) {
+    MemEventListener listener = MemEventListener(mem_test_client, true);
+
+    ASSERT_TRUE(listener.registerEvent(MEM_EVENT_OOM_KILL))
+            << "Failed registering OOM events as an event of interest";
+
+    ASSERT_TRUE(listener.deregisterEvent(MEM_EVENT_OOM_KILL)) << "Failed deregistering OOM events";
+
+    ASSERT_TRUE(listener.registerEvent(MEM_EVENT_OOM_KILL))
+            << "Failed to register for OOM events after deregister it";
+}
+
+/*
  * Validate `deregisterEvent()` fails with values >= `NR_MEM_EVENTS`.
  * Exactly like `register_event_invalid_values` test.
  */
