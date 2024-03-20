@@ -43,8 +43,6 @@ namespace memevents {
 static const std::string kClientRingBuffers[MemEventClient::NR_CLIENTS] = {
         MEM_EVENTS_AMS_RB, MEM_EVENTS_LMKD_RB, MEM_EVENTS_TEST_RB};
 
-static const bool isBpfRingBufferSupported = isAtLeastKernelVersion(5, 8, 0);
-
 class MemBpfRingbuf : public BpfRingbufBase {
   public:
     using EventCallback = std::function<void(const mem_event_t&)>;
@@ -176,10 +174,9 @@ MemEventListener::MemEventListener(MemEventClient client, bool attachTpForTests)
          * throughout the public APIs to prevent the listener to do any actions.
          */
         memBpfRb.reset(nullptr);
-        if (isBpfRingBufferSupported) {
+        if (isAtLeastKernelVersion(5, 8, 0)) {
             LOG(ERROR) << "memevent listener MemBpfRingbuf init failed: "
                        << status.error().message();
-            std::abort();
         } else {
             LOG(ERROR) << "memevent listener failed to initialize, not supported kernel";
         }
@@ -190,12 +187,8 @@ MemEventListener::~MemEventListener() {
     deregisterAllEvents();
 }
 
-bool MemEventListener::ok() {
-    return isBpfRingBufferSupported && memBpfRb;
-}
-
 bool MemEventListener::registerEvent(mem_event_type_t event_type) {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent register failed, failure to initialize";
         return false;
     }
@@ -254,7 +247,7 @@ bool MemEventListener::registerEvent(mem_event_type_t event_type) {
 }
 
 bool MemEventListener::listen(int timeout_ms) {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent listen failed, failure to initialize";
         return false;
     }
@@ -267,7 +260,7 @@ bool MemEventListener::listen(int timeout_ms) {
 }
 
 bool MemEventListener::deregisterEvent(mem_event_type_t event_type) {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent failed to deregister, failure to initialize";
         return false;
     }
@@ -308,7 +301,7 @@ bool MemEventListener::deregisterEvent(mem_event_type_t event_type) {
 }
 
 void MemEventListener::deregisterAllEvents() {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent deregister all events failed, failure to initialize";
         return;
     }
@@ -319,7 +312,7 @@ void MemEventListener::deregisterAllEvents() {
 }
 
 bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent failed getting memory events, failure to initialize";
         return false;
     }
@@ -337,7 +330,7 @@ bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
 }
 
 int MemEventListener::getRingBufferFd() {
-    if (!ok()) {
+    if (!memBpfRb) {
         LOG(ERROR) << "memevent failed getting ring-buffer fd, failure to initialize";
         return -1;
     }
