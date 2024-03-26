@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include <meminfo/androidprocheaps.h>
 #include <meminfo/pageacct.h>
 #include <meminfo/procmeminfo.h>
 #include <meminfo/sysmeminfo.h>
@@ -1225,6 +1226,62 @@ TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
 
     ASSERT_TRUE(ReadGpuTotalUsageKb(&size));
     EXPECT_TRUE(size >= 0);
+}
+
+TEST(AndroidProcHeaps, ExtractAndroidHeapStatsFromFileTest) {
+    std::string smaps =
+            R"smaps(12c00000-13440000 rw-p 00000000 00:00 0  [anon:dalvik-main space (region space)]
+Name:           [anon:dalvik-main space (region space)]
+Size:               8448 kB
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+Rss:                2652 kB
+Pss:                2652 kB
+Shared_Clean:        840 kB
+Shared_Dirty:         40 kB
+Private_Clean:        84 kB
+Private_Dirty:      2652 kB
+Referenced:         2652 kB
+Anonymous:          2652 kB
+AnonHugePages:         0 kB
+ShmemPmdMapped:        0 kB
+Shared_Hugetlb:        0 kB
+Private_Hugetlb:       0 kB
+Swap:                102 kB
+SwapPss:              70 kB
+Locked:             2652 kB
+VmFlags: rd wr mr mw me ac
+)smaps";
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(smaps, tf.fd));
+
+    bool foundSwapPss;
+    AndroidHeapStats stats[_NUM_HEAP];
+    ASSERT_TRUE(ExtractAndroidHeapStatsFromFile(tf.path, stats, &foundSwapPss));
+
+    AndroidHeapStats actualStats;
+    for (int i = 0; i < _NUM_CORE_HEAP; i++) {
+        actualStats.pss += stats[i].pss;
+        actualStats.swappablePss += stats[i].swappablePss;
+        actualStats.rss += stats[i].rss;
+        actualStats.privateDirty += stats[i].privateDirty;
+        actualStats.sharedDirty += stats[i].sharedDirty;
+        actualStats.privateClean += stats[i].privateClean;
+        actualStats.sharedClean += stats[i].sharedClean;
+        actualStats.swappedOut += stats[i].swappedOut;
+        actualStats.swappedOutPss += stats[i].swappedOutPss;
+    }
+    EXPECT_EQ(actualStats.pss, 2652);
+    EXPECT_EQ(actualStats.swappablePss, 0);
+    EXPECT_EQ(actualStats.rss, 2652);
+    EXPECT_EQ(actualStats.privateDirty, 2652);
+    EXPECT_EQ(actualStats.sharedDirty, 40);
+    EXPECT_EQ(actualStats.privateClean, 84);
+    EXPECT_EQ(actualStats.sharedClean, 840);
+    EXPECT_EQ(actualStats.swappedOut, 102);
+    EXPECT_EQ(actualStats.swappedOutPss, 70);
 }
 
 class DmabufHeapStats : public ::testing::Test {
