@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <meminfo/androidprocheaps.h>
 #include <meminfo/meminfo.h>
 #include <meminfo/pageacct.h>
 #include <meminfo/procmeminfo.h>
