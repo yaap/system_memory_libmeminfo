@@ -96,5 +96,37 @@ DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_end", AID_ROOT, AID_ROOT, tp_memev
     return 0;
 }
 
+DEFINE_BPF_PROG_KVER("skfilter/kswapd_wake", AID_ROOT, AID_ROOT, tp_memevents_test_kswapd_wake,
+                     KVER(5, 8, 0))
+(void* unused_ctx) {
+    struct mem_event_t* data = bpf_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_KSWAPD_WAKE;
+    data->event_data.kswapd_wake.node_id = mocked_kswapd_wake_event.event_data.kswapd_wake.node_id;
+    data->event_data.kswapd_wake.zone_id = mocked_kswapd_wake_event.event_data.kswapd_wake.zone_id;
+    data->event_data.kswapd_wake.alloc_order =
+            mocked_kswapd_wake_event.event_data.kswapd_wake.alloc_order;
+
+    bpf_rb_submit(data);
+
+    return 0;
+}
+
+DEFINE_BPF_PROG_KVER("skfilter/kswapd_sleep", AID_ROOT, AID_ROOT, tp_memevents_test_kswapd_sleep,
+                     KVER(5, 8, 0))
+(void* unused_ctx) {
+    struct mem_event_t* data = bpf_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_KSWAPD_SLEEP;
+    data->event_data.kswapd_sleep.node_id =
+            mocked_kswapd_sleep_event.event_data.kswapd_sleep.node_id;
+
+    bpf_rb_submit(data);
+
+    return 0;
+}
+
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");
