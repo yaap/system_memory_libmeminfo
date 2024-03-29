@@ -77,5 +77,35 @@ DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_direct_reclaim_end/lmkd", AID_ROOT,
     return 0;
 }
 
+DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_kswapd_wake/lmkd", AID_ROOT, AID_SYSTEM,
+                tp_lmkd_kswapd_wake)
+(struct kswapd_wake_args* args) {
+    struct mem_event_t* data = bpf_lmkd_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_KSWAPD_WAKE;
+    data->event_data.kswapd_wake.node_id = args->nid;
+    data->event_data.kswapd_wake.zone_id = args->zid;
+    data->event_data.kswapd_wake.alloc_order = args->order;
+
+    bpf_lmkd_rb_submit(data);
+
+    return 0;
+}
+
+DEFINE_BPF_PROG("tracepoint/vmscan/mm_vmscan_kswapd_sleep/lmkd", AID_ROOT, AID_SYSTEM,
+                tp_lmkd_kswapd_sleep)
+(struct kswapd_sleep_args* args) {
+    struct mem_event_t* data = bpf_lmkd_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_KSWAPD_SLEEP;
+    data->event_data.kswapd_wake.node_id = args->nid;
+
+    bpf_lmkd_rb_submit(data);
+
+    return 0;
+}
+
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");

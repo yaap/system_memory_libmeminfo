@@ -28,9 +28,11 @@ typedef unsigned int mem_event_type_t;
 #define MEM_EVENT_BASE MEM_EVENT_OOM_KILL
 #define MEM_EVENT_DIRECT_RECLAIM_BEGIN 1
 #define MEM_EVENT_DIRECT_RECLAIM_END 2
+#define MEM_EVENT_KSWAPD_WAKE 3
+#define MEM_EVENT_KSWAPD_SLEEP 4
 
 // This always comes after the last valid event type
-#define NR_MEM_EVENTS 3
+#define NR_MEM_EVENTS 5
 
 /* BPF-Rb Paths */
 #define MEM_EVENTS_AMS_RB "/sys/fs/bpf/map_bpfMemEvents_ams_rb"
@@ -44,6 +46,10 @@ typedef unsigned int mem_event_type_t;
     "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd"
 #define MEM_EVENTS_LMKD_VMSCAN_DR_END_TP \
     "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd"
+#define MEM_EVENTS_LMKD_VMSCAN_KSWAPD_WAKE_TP \
+    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_wake_lmkd"
+#define MEM_EVENTS_LMKD_VMSCAN_KSWAPD_SLEEP_TP \
+    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_sleep_lmkd"
 #define MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP \
     "/sys/fs/bpf/prog_bpfMemEventsTest_tracepoint_oom_mark_victim"
 
@@ -59,6 +65,16 @@ struct mem_event_t {
             uint32_t uid;
             char process_name[MEM_EVENT_PROC_NAME_LEN];
         } oom_kill;
+
+        struct KswapdWake {
+            uint32_t node_id;
+            uint32_t zone_id;
+            uint32_t alloc_order;
+        } kswapd_wake;
+
+        struct KswapdSleep {
+            uint32_t node_id;
+        } kswapd_sleep;
     } event_data;
 };
 
@@ -79,6 +95,20 @@ struct direct_reclaim_begin_args {
 
 struct direct_reclaim_end_args {
     char __ignore[16];
+};
+
+struct kswapd_wake_args {
+    uint64_t __ignore;
+    /* Actual fields start at offset 8 */
+    uint32_t nid;
+    uint32_t zid;
+    uint32_t order;
+};
+
+struct kswapd_sleep_args {
+    uint64_t __ignore;
+    /* Actual fields start at offset 8 */
+    uint32_t nid;
 };
 
 #endif /* MEM_EVENTS_BPF_TYES_H_ */
