@@ -50,7 +50,8 @@ static const std::string bpfRbsPaths[MemEventClient::NR_CLIENTS] = {
         MEM_EVENTS_AMS_RB, MEM_EVENTS_LMKD_RB, MEM_EVENTS_TEST_RB};
 static const std::string testBpfSkfilterProgPaths[NR_MEM_EVENTS] = {
         MEM_EVENTS_TEST_OOM_KILL_TP, MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP,
-        MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP};
+        MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP, MEM_EVENTS_TEST_KSWAPD_WAKE_TP,
+        MEM_EVENTS_TEST_KSWAPD_SLEEP_TP};
 static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
 
 /*

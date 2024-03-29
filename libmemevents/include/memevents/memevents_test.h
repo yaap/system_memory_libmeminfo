@@ -27,6 +27,8 @@
     "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_direct_reclaim_begin"
 #define MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP \
     "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_direct_reclaim_end"
+#define MEM_EVENTS_TEST_KSWAPD_WAKE_TP "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_kswapd_wake"
+#define MEM_EVENTS_TEST_KSWAPD_SLEEP_TP "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_kswapd_sleep"
 
 // clang-format off
 const struct mem_event_t mocked_oom_event = {
@@ -37,6 +39,20 @@ const struct mem_event_t mocked_oom_event = {
         .process_name = "fake_process",
         .timestamp_ms = 1,
         .oom_score_adj = 999,
+}};
+
+const struct mem_event_t mocked_kswapd_wake_event = {
+     .type = MEM_EVENT_KSWAPD_WAKE,
+     .event_data.kswapd_wake = {
+        .node_id = 1,
+        .zone_id = 0,
+        .alloc_order = 2,
+}};
+
+const struct mem_event_t mocked_kswapd_sleep_event = {
+     .type = MEM_EVENT_KSWAPD_SLEEP,
+     .event_data.kswapd_sleep = {
+        .node_id = 3,
 }};
 // clang-format on
 
