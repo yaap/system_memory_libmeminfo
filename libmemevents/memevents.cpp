@@ -110,6 +110,18 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
             .tpEvent = "mm_vmscan_direct_reclaim_end",
             .event_type = MEM_EVENT_DIRECT_RECLAIM_END
         },
+        {
+            .prog = MEM_EVENTS_LMKD_VMSCAN_KSWAPD_WAKE_TP,
+            .tpGroup = "vmscan",
+            .tpEvent = "mm_vmscan_kswapd_wake",
+            .event_type = MEM_EVENT_KSWAPD_WAKE
+        },
+        {
+            .prog = MEM_EVENTS_LMKD_VMSCAN_KSWAPD_SLEEP_TP,
+            .tpGroup = "vmscan",
+            .tpEvent = "mm_vmscan_kswapd_sleep",
+            .event_type = MEM_EVENT_KSWAPD_SLEEP
+        },
     },
     // MemEventsTest
     {
