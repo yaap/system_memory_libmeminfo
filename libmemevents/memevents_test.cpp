@@ -162,6 +162,10 @@ TEST_F(MemEventsBpfSetupTest, loaded_lmkd_progs) {
             << "Failed to find lmkd direct_reclaim_begin bpf-program";
     ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_LMKD_VMSCAN_DR_END_TP))
             << "Failed to find lmkd direct_reclaim_end bpf-program";
+    ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_LMKD_VMSCAN_KSWAPD_WAKE_TP))
+            << "Failed to find lmkd kswapd_wake bpf-program";
+    ASSERT_TRUE(std::filesystem::exists(MEM_EVENTS_LMKD_VMSCAN_KSWAPD_SLEEP_TP))
+            << "Failed to find lmkd kswapd_sleep bpf-program";
 }
 
 /*
@@ -392,6 +396,16 @@ class MemEventsListenerBpf : public ::testing::Test {
                 struct direct_reclaim_end_args dr_end_fake_args;
                 android::bpf::runProgram(mProgram, &dr_end_fake_args, sizeof(dr_end_fake_args));
                 break;
+            case MEM_EVENT_KSWAPD_WAKE:
+                struct kswapd_wake_args kswapd_wake_fake_args;
+                android::bpf::runProgram(mProgram, &kswapd_wake_fake_args,
+                                         sizeof(kswapd_wake_fake_args));
+                break;
+            case MEM_EVENT_KSWAPD_SLEEP:
+                struct kswapd_sleep_args kswapd_sleep_fake_args;
+                android::bpf::runProgram(mProgram, &kswapd_sleep_fake_args,
+                                         sizeof(kswapd_sleep_fake_args));
+                break;
             default:
                 FAIL() << "Invalid event type provided";
         }
@@ -434,6 +448,52 @@ class MemEventsListenerBpf : public ::testing::Test {
 
         ASSERT_TRUE(mem_listener.listen(5000));  // 5 second timeout
     }
+
+    void validateMockedEvent(const mem_event_t& mem_event) {
+        /*
+         * These values are set inside the testing prog `memevents_test.h`,
+         * they can't be passed from the test to the bpf-prog.
+         */
+        switch (mem_event.type) {
+            case MEM_EVENT_OOM_KILL:
+                ASSERT_EQ(mem_event.event_data.oom_kill.pid,
+                          mocked_oom_event.event_data.oom_kill.pid)
+                        << "MEM_EVENT_OOM_KILL: Didn't receive expected PID";
+                ASSERT_EQ(mem_event.event_data.oom_kill.uid,
+                          mocked_oom_event.event_data.oom_kill.uid)
+                        << "MEM_EVENT_OOM_KILL: Didn't receive expected UID";
+                ASSERT_EQ(mem_event.event_data.oom_kill.oom_score_adj,
+                          mocked_oom_event.event_data.oom_kill.oom_score_adj)
+                        << "MEM_EVENT_OOM_KILL: Didn't receive expected OOM score";
+                ASSERT_EQ(strcmp(mem_event.event_data.oom_kill.process_name,
+                                 mocked_oom_event.event_data.oom_kill.process_name),
+                          0)
+                        << "MEM_EVENT_OOM_KILL: Didn't receive expected process name";
+                break;
+            case MEM_EVENT_DIRECT_RECLAIM_BEGIN:
+                /* TP doesn't contain any data to mock */
+                break;
+            case MEM_EVENT_DIRECT_RECLAIM_END:
+                /* TP doesn't contain any data to mock */
+                break;
+            case MEM_EVENT_KSWAPD_WAKE:
+                ASSERT_EQ(mem_event.event_data.kswapd_wake.node_id,
+                          mocked_kswapd_wake_event.event_data.kswapd_wake.node_id)
+                        << "MEM_EVENT_KSWAPD_WAKE: Didn't receive expected node id";
+                ASSERT_EQ(mem_event.event_data.kswapd_wake.zone_id,
+                          mocked_kswapd_wake_event.event_data.kswapd_wake.zone_id)
+                        << "MEM_EVENT_KSWAPD_WAKE: Didn't receive expected zone id";
+                ASSERT_EQ(mem_event.event_data.kswapd_wake.alloc_order,
+                          mocked_kswapd_wake_event.event_data.kswapd_wake.alloc_order)
+                        << "MEM_EVENT_KSWAPD_WAKE: Didn't receive expected alloc_order";
+                break;
+            case MEM_EVENT_KSWAPD_SLEEP:
+                ASSERT_EQ(mem_event.event_data.kswapd_sleep.node_id,
+                          mocked_kswapd_sleep_event.event_data.kswapd_sleep.node_id)
+                        << "MEM_EVENT_KSWAPD_SLEEP: Didn't receive expected node id";
+                break;
+        }
+    }
 };
 
 /*
@@ -450,22 +510,7 @@ TEST_F(MemEventsListenerBpf, listener_bpf_oom_kill) {
     ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a OOM event";
-
-    /*
-     * This values are set inside the testing prog `memevents_test.h`. These values can't be passed
-     * from the test to the bpf-prog.
-     */
-    ASSERT_EQ(mem_events[0].event_data.oom_kill.pid, mocked_oom_event.event_data.oom_kill.pid)
-            << "Didn't receive expected PID";
-    ASSERT_EQ(mem_events[0].event_data.oom_kill.uid, mocked_oom_event.event_data.oom_kill.uid)
-            << "Didn't receive expected UID";
-    ASSERT_EQ(mem_events[0].event_data.oom_kill.oom_score_adj,
-              mocked_oom_event.event_data.oom_kill.oom_score_adj)
-            << "Didn't receive expected OOM score";
-    ASSERT_EQ(strcmp(mem_events[0].event_data.oom_kill.process_name,
-                     mocked_oom_event.event_data.oom_kill.process_name),
-              0)
-            << "Didn't receive expected process name";
+    validateMockedEvent(mem_events[0]);
 }
 
 /*
@@ -482,6 +527,7 @@ TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_begin) {
     ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim begin event";
+    validateMockedEvent(mem_events[0]);
 }
 
 /*
@@ -498,6 +544,33 @@ TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_end) {
     ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim end event";
+    validateMockedEvent(mem_events[0]);
+}
+
+TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_wake) {
+    const mem_event_type_t event_type = MEM_EVENT_KSWAPD_WAKE;
+
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    testListenEvent(event_type);
+
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a kswapd wake event";
+    validateMockedEvent(mem_events[0]);
+}
+
+TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_sleep) {
+    const mem_event_type_t event_type = MEM_EVENT_KSWAPD_SLEEP;
+
+    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    testListenEvent(event_type);
+
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a kswapd sleep event";
+    validateMockedEvent(mem_events[0]);
 }
 
 /*
