@@ -39,6 +39,11 @@ const struct mem_event_t mocked_oom_event = {
         .process_name = "fake_process",
         .timestamp_ms = 1,
         .oom_score_adj = 999,
+        .total_vm_kb = 123,
+        .anon_rss_kb = 321,
+        .file_rss_kb = 345,
+        .shmem_rss_kb = 543,
+        .pgtables_kb = 6789,
 }};
 
 const struct mem_event_t mocked_kswapd_wake_event = {
