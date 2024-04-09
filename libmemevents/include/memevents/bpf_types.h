@@ -64,6 +64,11 @@ struct mem_event_t {
             uint64_t oom_score_adj;
             uint32_t uid;
             char process_name[MEM_EVENT_PROC_NAME_LEN];
+            uint64_t total_vm_kb;
+            uint64_t anon_rss_kb;
+            uint64_t file_rss_kb;
+            uint64_t shmem_rss_kb;
+            uint64_t pgtables_kb;
         } oom_kill;
 
         struct KswapdWake {
@@ -84,8 +89,13 @@ struct mark_victim_args {
     uint64_t __ignore;
     /* Actual fields start at offset 8 */
     uint32_t pid;
-    uint32_t uid;
     uint32_t __data_loc_comm;
+    uint64_t total_vm;
+    uint64_t anon_rss;
+    uint64_t file_rss;
+    uint64_t shmem_rss;
+    uint32_t uid;
+    uint64_t pgtables;
     short oom_score_adj;
 };
 
