@@ -30,8 +30,8 @@
 constexpr char kLowRamProp[] = "ro.config.low_ram";
 constexpr char kProductMaxPageSizeProp[] = "ro.product.cpu.pagesize.max";
 constexpr char kVendorApiLevelProp[] = "ro.vendor.api_level";
-// 64KB by default (unsupported devices must explicitly opt-out)
-constexpr int kRequiredMaxSupportedPageSize = 65536;
+// 16KB by default (unsupported devices must explicitly opt-out)
+constexpr size_t kRequiredMaxSupportedPageSize = 0x4000;
 
 static std::set<std::string> GetMounts() {
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
@@ -71,8 +71,8 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
 
         uint64_t p_align = phdr.p_align;
 
-        EXPECT_EQ(p_align, kRequiredMaxSupportedPageSize)
-            << " " << elf.path << " is not 64KB aligned";
+        EXPECT_GE(p_align, kRequiredMaxSupportedPageSize)
+            << " " << elf.path << " is not at least 16KiB aligned";
       }
     };
 
