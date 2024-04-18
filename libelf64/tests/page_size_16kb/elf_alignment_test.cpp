@@ -28,7 +28,6 @@
 #include <android-base/strings.h>
 
 constexpr char kLowRamProp[] = "ro.config.low_ram";
-constexpr char kProductMaxPageSizeProp[] = "ro.product.cpu.pagesize.max";
 constexpr char kVendorApiLevelProp[] = "ro.vendor.api_level";
 // 16KB by default (unsupported devices must explicitly opt-out)
 constexpr size_t kRequiredMaxSupportedPageSize = 0x4000;
@@ -80,11 +79,6 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
       return android::base::GetBoolProperty(kLowRamProp, false);
     }
 
-    static int MaxPageSizeSupported() {
-      return android::base::GetIntProperty(kProductMaxPageSizeProp,
-                                           kRequiredMaxSupportedPageSize);
-    }
-
     static int VendorApiLevel() {
       // "ro.vendor.api_level" is added in Android T. Undefined indicates S or below
       return android::base::GetIntProperty(kVendorApiLevelProp, __ANDROID_API_S__);
@@ -95,8 +89,6 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
         GTEST_SKIP() << "16kB support is only required on V and later releases.";
       } else if (IsLowRamDevice()) {
         GTEST_SKIP() << "Low Ram devices only support 4kB page size";
-      } else if (MaxPageSizeSupported()) {
-        GTEST_SKIP() << "Device opted-out of 16kB page size support";
       }
     }
 };
