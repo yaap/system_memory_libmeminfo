@@ -28,10 +28,9 @@
 #include <android-base/strings.h>
 
 constexpr char kLowRamProp[] = "ro.config.low_ram";
-constexpr char kProductMaxPageSizeProp[] = "ro.product.cpu.pagesize.max";
 constexpr char kVendorApiLevelProp[] = "ro.vendor.api_level";
-// 64KB by default (unsupported devices must explicitly opt-out)
-constexpr int kRequiredMaxSupportedPageSize = 65536;
+// 16KB by default (unsupported devices must explicitly opt-out)
+constexpr size_t kRequiredMaxSupportedPageSize = 0x4000;
 
 static std::set<std::string> GetMounts() {
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
@@ -62,6 +61,11 @@ static std::set<std::string> GetMounts() {
 class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
   protected:
     static void LoadAlignmentCb(const android::elf64::Elf64Binary& elf) {
+      // Ignore VNDK APEXes. They are prebuilts from old branches, and would
+      // only be used on devices with old vendor images.
+      if (elf.path.find("/apex/com.android.vndk.v") == 0) {
+        return;
+      }
       for (int i = 0; i < elf.phdrs.size(); i++) {
         Elf64_Phdr phdr = elf.phdrs[i];
 
@@ -71,18 +75,13 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
 
         uint64_t p_align = phdr.p_align;
 
-        EXPECT_EQ(p_align, kRequiredMaxSupportedPageSize)
-            << " " << elf.path << " is not 64KB aligned";
+        EXPECT_GE(p_align, kRequiredMaxSupportedPageSize)
+            << " " << elf.path << " is not at least 16KiB aligned";
       }
     };
 
     static bool IsLowRamDevice() {
       return android::base::GetBoolProperty(kLowRamProp, false);
-    }
-
-    static int MaxPageSizeSupported() {
-      return android::base::GetIntProperty(kProductMaxPageSizeProp,
-                                           kRequiredMaxSupportedPageSize);
     }
 
     static int VendorApiLevel() {
@@ -95,8 +94,6 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
         GTEST_SKIP() << "16kB support is only required on V and later releases.";
       } else if (IsLowRamDevice()) {
         GTEST_SKIP() << "Low Ram devices only support 4kB page size";
-      } else if (MaxPageSizeSupported()) {
-        GTEST_SKIP() << "Device opted-out of 16kB page size support";
       }
     }
 };
