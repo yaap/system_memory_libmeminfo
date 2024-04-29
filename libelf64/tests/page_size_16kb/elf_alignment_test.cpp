@@ -98,6 +98,7 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
     }
 };
 
+// @VsrTest = 3.14.1
 TEST_P(ElfAlignmentTest, VerifyLoadSegmentAlignment) {
   android::elf64::ForEachElf64FromDir(GetParam(), &LoadAlignmentCb);
 }
