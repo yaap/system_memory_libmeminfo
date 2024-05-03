@@ -91,9 +91,12 @@ ProcessRecord::ProcessRecord(pid_t pid, bool get_wss, uint64_t pgflags, uint64_t
         }
     }
 
-    // We want to use Smaps() to populate procmem_'s maps before calling Wss() or Usage(), as
-    // these will fall back on the slower ReadMaps().
-    procmem_.Smaps("", true, true);
+    // We generally want to use Smaps() to populate procmem_'s maps before calling Wss() or
+    // Usage(), as these will fall back on the slower ReadMaps(). However, ReadMaps() must be
+    // used if page flags are inspected, as Smaps() does not have per-page granularity.
+    if (pgflags == 0 && pgflags_mask == 0) {
+        procmem_.Smaps("", true, true);
+    }
     usage_or_wss_ = get_wss ? procmem_.Wss() : procmem_.Usage();
     swap_offsets_ = procmem_.SwapOffsets();
     pid_ = pid;
