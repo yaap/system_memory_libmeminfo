@@ -75,7 +75,6 @@ cc_test {
     require_root: true,
 
     static_libs: [
-        "libc++fs",
         "libmeminfo",
         "libbase",
         "liblog",
