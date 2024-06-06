@@ -30,9 +30,6 @@ cc_library {
         "parse.cpp",
         "iter.cpp",
     ],
-    static_libs: [
-        "libc++fs",
-    ],
     cflags: [
         "-Wall",
         "-Werror",
