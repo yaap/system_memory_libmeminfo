@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// for now a hack: this likely needs to be fixed properly
+#define BPF_MAP_LOCKLESS_FOR_TEST
 #include <bpf/BpfMap.h>
 #include <bpf/BpfRingbuf.h>
 #include <bpf/WaitForProgsLoaded.h>
