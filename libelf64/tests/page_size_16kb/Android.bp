@@ -31,6 +31,8 @@ cc_test {
         "elf_alignment_test.cpp",
     ],
 
+    cpp_std: "gnu++20",
+
     static_libs: [
         "libdm",
         "libext2_uuid",
