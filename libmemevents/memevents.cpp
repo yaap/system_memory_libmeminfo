@@ -343,7 +343,8 @@ bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
     }
 
     base::Result<int> ret = memBpfRb->ConsumeAll([&](const mem_event_t& mem_event) {
-        if (mEventsRegistered[mem_event.type]) mem_events.emplace_back(mem_event);
+        if (isValidEventType(mem_event.type) && mEventsRegistered[mem_event.type])
+            mem_events.emplace_back(mem_event);
     });
 
     if (!ret.ok()) {
