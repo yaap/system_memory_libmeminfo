@@ -61,10 +61,20 @@ static std::set<std::string> GetMounts() {
 class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
   protected:
     static void LoadAlignmentCb(const android::elf64::Elf64Binary& elf) {
-      // Ignore VNDK APEXes. They are prebuilts from old branches, and would
-      // only be used on devices with old vendor images.
-      if (elf.path.find("/apex/com.android.vndk.v") == 0) {
-        return;
+      static constexpr std::array ignored_directories{
+        // Ignore VNDK APEXes. They are prebuilts from old branches, and would
+        // only be used on devices with old vendor images.
+        "/apex/com.android.vndk.v",
+        // Ignore non-Android firmware images.
+        "/odm/firmware",
+        "/vendor/firmware",
+        "/vendor/firmware_mnt/image"
+      };
+
+      for (const auto& dir : ignored_directories) {
+        if (elf.path.starts_with(dir)) {
+          return;
+        }
       }
       for (int i = 0; i < elf.phdrs.size(); i++) {
         Elf64_Phdr phdr = elf.phdrs[i];
