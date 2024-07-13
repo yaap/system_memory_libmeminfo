@@ -66,6 +66,8 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
         // only be used on devices with old vendor images.
         "/apex/com.android.vndk.v",
         // Ignore non-Android firmware images.
+        "/odm/firmware",
+        "/vendor/firmware",
         "/vendor/firmware_mnt/image"
       };
 
