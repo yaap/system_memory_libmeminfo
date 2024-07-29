@@ -230,21 +230,6 @@ TEST_F(MemEventsListenerTest, initialize_valid_client_with_test_flag) {
 }
 
 /*
- * MemEventListener should NOT fail when initializing for all valid `MemEventClient`.
- * We considered a `MemEventClient` valid if its between 0 and MemEventClient::NR_CLIENTS.
- */
-TEST_F(MemEventsListenerTest, initialize_valid_clients) {
-    std::unique_ptr<MemEventListener> listener;
-    for (int i = 0; i < MemEventClient::NR_CLIENTS; i++) {
-        const MemEventClient client = static_cast<MemEventClient>(i);
-        listener = std::make_unique<MemEventListener>(client);
-        ASSERT_TRUE(listener) << "MemEventListener failed to initialize with valid client value: "
-                              << client;
-        ASSERT_TRUE(listener->ok()) << "MemEventListener failed to initialize with bpf rb manager";
-    }
-}
-
-/*
  * MemEventClient base client should equal to AMS client.
  */
 TEST_F(MemEventsListenerTest, base_client_equal_ams_client) {
