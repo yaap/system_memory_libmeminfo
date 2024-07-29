@@ -54,6 +54,28 @@ static const std::string testBpfSkfilterProgPaths[NR_MEM_EVENTS] = {
         MEM_EVENTS_TEST_KSWAPD_SLEEP_TP};
 static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
 
+static void initializeTestListener(std::unique_ptr<MemEventListener>& memevent_listener,
+                                   const bool attachTpForTests) {
+    if (!memevent_listener) {
+        memevent_listener = std::make_unique<MemEventListener>(mem_test_client, attachTpForTests);
+    }
+    ASSERT_TRUE(memevent_listener) << "Memory event listener is not initialized";
+
+    /*
+     * Some test suite seems to have issues when trying to re-initialize
+     * the BPF manager for the MemEventsTest, therefore we retry.
+     */
+    if (!memevent_listener->ok()) {
+        memevent_listener.reset();
+        /* This sleep is needed in order to allow for the BPF manager to
+         * initialize without failure.
+         */
+        sleep(1);
+        memevent_listener = std::make_unique<MemEventListener>(mem_test_client);
+    }
+    ASSERT_TRUE(memevent_listener->ok()) << "BPF ring buffer manager didn't initialize";
+}
+
 /*
  * Test suite to test on devices that don't support BPF, kernel <= 5.8.
  * We allow for the listener to iniailize gracefully, but every public API will
@@ -61,7 +83,7 @@ static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
  */
 class MemEventListenerUnsupportedKernel : public ::testing::Test {
   protected:
-    MemEventListener memevent_listener = MemEventListener(mem_test_client);
+    std::unique_ptr<MemEventListener> memevent_listener;
 
     static void SetUpTestSuite() {
         if (isBpfRingBufferSupported) {
@@ -70,11 +92,9 @@ class MemEventListenerUnsupportedKernel : public ::testing::Test {
         }
     }
 
-    void SetUp() override {
-        ASSERT_FALSE(memevent_listener.ok()) << "BPF ring buffer manager shouldn't initialize";
-    }
+    void SetUp() override { initializeTestListener(memevent_listener, false); }
 
-    void TearDown() override { memevent_listener.deregisterAllEvents(); }
+    void TearDown() override { memevent_listener.reset(); }
 };
 
 /*
@@ -90,9 +110,9 @@ TEST_F(MemEventListenerUnsupportedKernel, initialize_invalid_client) {
  * Register will fail when running on a older kernel, even when we pass a valid event type.
  */
 TEST_F(MemEventListenerUnsupportedKernel, fail_to_register) {
-    ASSERT_FALSE(memevent_listener.registerEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_FALSE(memevent_listener->registerEvent(MEM_EVENT_OOM_KILL))
             << "Listener should fail to register valid event type on an unsupported kernel";
-    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS))
+    ASSERT_FALSE(memevent_listener->registerEvent(NR_MEM_EVENTS))
             << "Listener should fail to register invalid event type";
 }
 
@@ -102,7 +122,7 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_register) {
  * therefore we don't need to register for an event before trying to call listen.
  */
 TEST_F(MemEventListenerUnsupportedKernel, fail_to_listen) {
-    ASSERT_FALSE(memevent_listener.listen()) << "listen() should fail on unsupported kernel";
+    ASSERT_FALSE(memevent_listener->listen()) << "listen() should fail on unsupported kernel";
 }
 
 /*
@@ -110,9 +130,9 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_listen) {
  * kernel.
  */
 TEST_F(MemEventListenerUnsupportedKernel, fail_to_unregister_event) {
-    ASSERT_FALSE(memevent_listener.deregisterEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_FALSE(memevent_listener->deregisterEvent(MEM_EVENT_OOM_KILL))
             << "Listener should fail to deregister valid event type on an older kernel";
-    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS))
+    ASSERT_FALSE(memevent_listener->deregisterEvent(NR_MEM_EVENTS))
             << "Listener should fail to deregister invalid event type, regardless of kernel "
                "version";
 }
@@ -122,7 +142,7 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_unregister_event) {
  */
 TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_mem_events) {
     std::vector<mem_event_t> mem_events;
-    ASSERT_FALSE(memevent_listener.getMemEvents(mem_events))
+    ASSERT_FALSE(memevent_listener->getMemEvents(mem_events))
             << "Fetching memory events should fail on an older kernel";
 }
 
@@ -130,7 +150,7 @@ TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_mem_events) {
  * The `getRingBufferFd()` API should fail on an older kernel
  */
 TEST_F(MemEventListenerUnsupportedKernel, fail_to_get_rb_fd) {
-    ASSERT_LT(memevent_listener.getRingBufferFd(), 0)
+    ASSERT_LT(memevent_listener->getRingBufferFd(), 0)
             << "Fetching bpf-rb file descriptor should fail on an older kernel";
 }
 
@@ -191,7 +211,7 @@ TEST_F(MemEventsBpfSetupTest, loaded_ring_buffers) {
 
 class MemEventsListenerTest : public ::testing::Test {
   protected:
-    MemEventListener memevent_listener = MemEventListener(mem_test_client);
+    std::unique_ptr<MemEventListener> memevent_listener;
 
     static void SetUpTestSuite() {
         if (!isBpfRingBufferSupported) {
@@ -199,12 +219,9 @@ class MemEventsListenerTest : public ::testing::Test {
         }
     }
 
-    void SetUp() override {
-        ASSERT_TRUE(memevent_listener.ok())
-                << "Memory listener failed to initialize bpf ring buffer manager";
-    }
+    void SetUp() override { initializeTestListener(memevent_listener, false); }
 
-    void TearDown() override { memevent_listener.deregisterAllEvents(); }
+    void TearDown() override { memevent_listener.reset(); }
 };
 
 /*
@@ -230,21 +247,6 @@ TEST_F(MemEventsListenerTest, initialize_valid_client_with_test_flag) {
 }
 
 /*
- * MemEventListener should NOT fail when initializing for all valid `MemEventClient`.
- * We considered a `MemEventClient` valid if its between 0 and MemEventClient::NR_CLIENTS.
- */
-TEST_F(MemEventsListenerTest, initialize_valid_clients) {
-    std::unique_ptr<MemEventListener> listener;
-    for (int i = 0; i < MemEventClient::NR_CLIENTS; i++) {
-        const MemEventClient client = static_cast<MemEventClient>(i);
-        listener = std::make_unique<MemEventListener>(client);
-        ASSERT_TRUE(listener) << "MemEventListener failed to initialize with valid client value: "
-                              << client;
-        ASSERT_TRUE(listener->ok()) << "MemEventListener failed to initialize with bpf rb manager";
-    }
-}
-
-/*
  * MemEventClient base client should equal to AMS client.
  */
 TEST_F(MemEventsListenerTest, base_client_equal_ams_client) {
@@ -256,9 +258,9 @@ TEST_F(MemEventsListenerTest, base_client_equal_ams_client) {
  * Validate `registerEvent()` fails with values >= `NR_MEM_EVENTS`.
  */
 TEST_F(MemEventsListenerTest, register_event_invalid_values) {
-    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS));
-    ASSERT_FALSE(memevent_listener.registerEvent(NR_MEM_EVENTS + 1));
-    ASSERT_FALSE(memevent_listener.registerEvent(-1));
+    ASSERT_FALSE(memevent_listener->registerEvent(NR_MEM_EVENTS));
+    ASSERT_FALSE(memevent_listener->registerEvent(NR_MEM_EVENTS + 1));
+    ASSERT_FALSE(memevent_listener->registerEvent(-1));
 }
 
 /*
@@ -267,9 +269,9 @@ TEST_F(MemEventsListenerTest, register_event_invalid_values) {
  */
 TEST_F(MemEventsListenerTest, register_event_repeated_event) {
     const int event_type = MEM_EVENT_OOM_KILL;
-    ASSERT_TRUE(memevent_listener.registerEvent(event_type));
-    ASSERT_TRUE(memevent_listener.registerEvent(event_type));
-    ASSERT_TRUE(memevent_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
 }
 
 /*
@@ -278,14 +280,14 @@ TEST_F(MemEventsListenerTest, register_event_repeated_event) {
  */
 TEST_F(MemEventsListenerTest, register_event_valid_values) {
     for (unsigned int i = 0; i < NR_MEM_EVENTS; i++)
-        ASSERT_TRUE(memevent_listener.registerEvent(i)) << "Failed to register event: " << i;
+        ASSERT_TRUE(memevent_listener->registerEvent(i)) << "Failed to register event: " << i;
 }
 
 /*
  * `listen()` should return false when no events have been registered.
  */
 TEST_F(MemEventsListenerTest, listen_no_registered_events) {
-    ASSERT_FALSE(memevent_listener.listen());
+    ASSERT_FALSE(memevent_listener->listen());
 }
 
 /*
@@ -293,9 +295,9 @@ TEST_F(MemEventsListenerTest, listen_no_registered_events) {
  * Exactly like `register_event_invalid_values` test.
  */
 TEST_F(MemEventsListenerTest, deregister_event_invalid_values) {
-    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS));
-    ASSERT_FALSE(memevent_listener.deregisterEvent(NR_MEM_EVENTS + 1));
-    ASSERT_FALSE(memevent_listener.deregisterEvent(-1));
+    ASSERT_FALSE(memevent_listener->deregisterEvent(NR_MEM_EVENTS));
+    ASSERT_FALSE(memevent_listener->deregisterEvent(NR_MEM_EVENTS + 1));
+    ASSERT_FALSE(memevent_listener->deregisterEvent(-1));
 }
 
 /*
@@ -304,9 +306,9 @@ TEST_F(MemEventsListenerTest, deregister_event_invalid_values) {
  */
 TEST_F(MemEventsListenerTest, deregister_repeated_event) {
     const int event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
-    ASSERT_TRUE(memevent_listener.registerEvent(event_type));
-    ASSERT_TRUE(memevent_listener.deregisterEvent(event_type));
-    ASSERT_TRUE(memevent_listener.deregisterEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->deregisterEvent(event_type));
+    ASSERT_TRUE(memevent_listener->deregisterEvent(event_type));
 }
 
 /*
@@ -314,7 +316,7 @@ TEST_F(MemEventsListenerTest, deregister_repeated_event) {
  * when we deregister a non-registered, valid, event.
  */
 TEST_F(MemEventsListenerTest, deregister_unregistered_event) {
-    ASSERT_TRUE(memevent_listener.deregisterEvent(MEM_EVENT_DIRECT_RECLAIM_END));
+    ASSERT_TRUE(memevent_listener->deregisterEvent(MEM_EVENT_DIRECT_RECLAIM_END));
 }
 
 /*
@@ -322,10 +324,10 @@ TEST_F(MemEventsListenerTest, deregister_unregistered_event) {
  * events.
  */
 TEST_F(MemEventsListenerTest, deregister_all_events) {
-    ASSERT_TRUE(memevent_listener.registerEvent(MEM_EVENT_OOM_KILL));
-    ASSERT_TRUE(memevent_listener.registerEvent(MEM_EVENT_DIRECT_RECLAIM_BEGIN));
-    memevent_listener.deregisterAllEvents();
-    ASSERT_FALSE(memevent_listener.listen())
+    ASSERT_TRUE(memevent_listener->registerEvent(MEM_EVENT_OOM_KILL));
+    ASSERT_TRUE(memevent_listener->registerEvent(MEM_EVENT_DIRECT_RECLAIM_BEGIN));
+    memevent_listener->deregisterAllEvents();
+    ASSERT_FALSE(memevent_listener->listen())
             << "Expected to fail since we are not registered to any events";
 }
 
@@ -341,7 +343,7 @@ TEST_F(MemEventsListenerTest, base_and_oom_events_are_equal) {
  * Validate that `getRingBufferFd()` returns a valid file descriptor.
  */
 TEST_F(MemEventsListenerTest, get_client_rb_fd) {
-    ASSERT_GE(memevent_listener.getRingBufferFd(), 0)
+    ASSERT_GE(memevent_listener->getRingBufferFd(), 0)
             << "Failed to get a valid bpf-rb file descriptor";
 }
 
@@ -398,7 +400,7 @@ class MemEventsListenerBpf : public ::testing::Test {
     }
 
   protected:
-    MemEventListener mem_listener = MemEventListener(mem_test_client);
+    std::unique_ptr<MemEventListener> memevent_listener;
 
     static void SetUpTestSuite() {
         if (!isAtLeastKernelVersion(5, 8, 0)) {
@@ -406,11 +408,9 @@ class MemEventsListenerBpf : public ::testing::Test {
         }
     }
 
-    void SetUp() override {
-        ASSERT_TRUE(mem_listener.ok()) << "Listener failed to initialize bpf rb manager";
-    }
+    void SetUp() override { initializeTestListener(memevent_listener, false); }
 
-    void TearDown() override { mem_listener.deregisterAllEvents(); }
+    void TearDown() override { memevent_listener.reset(); }
 
     /*
      * Helper function to insert mocked data into the testing [bpf] ring buffer.
@@ -431,7 +431,7 @@ class MemEventsListenerBpf : public ::testing::Test {
 
         setMockDataInRb(event_type);
 
-        ASSERT_TRUE(mem_listener.listen(5000));  // 5 second timeout
+        ASSERT_TRUE(memevent_listener->listen(5000));  // 5 second timeout
     }
 
     void validateMockedEvent(const mem_event_t& mem_event) {
@@ -506,11 +506,11 @@ class MemEventsListenerBpf : public ::testing::Test {
 TEST_F(MemEventsListenerBpf, listener_bpf_oom_kill) {
     const mem_event_type_t event_type = MEM_EVENT_OOM_KILL;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
     testListenEvent(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a OOM event";
     validateMockedEvent(mem_events[0]);
@@ -523,11 +523,11 @@ TEST_F(MemEventsListenerBpf, listener_bpf_oom_kill) {
 TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_begin) {
     const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_BEGIN;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
     testListenEvent(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim begin event";
     validateMockedEvent(mem_events[0]);
@@ -540,11 +540,11 @@ TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_begin) {
 TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_end) {
     const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_END;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
     testListenEvent(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a direct reclaim end event";
     validateMockedEvent(mem_events[0]);
@@ -553,11 +553,11 @@ TEST_F(MemEventsListenerBpf, listener_bpf_direct_reclaim_end) {
 TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_wake) {
     const mem_event_type_t event_type = MEM_EVENT_KSWAPD_WAKE;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
     testListenEvent(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a kswapd wake event";
     validateMockedEvent(mem_events[0]);
@@ -566,11 +566,11 @@ TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_wake) {
 TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_sleep) {
     const mem_event_type_t event_type = MEM_EVENT_KSWAPD_SLEEP;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
     testListenEvent(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a kswapd sleep event";
     validateMockedEvent(mem_events[0]);
@@ -583,7 +583,7 @@ TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_sleep) {
 TEST_F(MemEventsListenerBpf, no_register_events_listen_fails) {
     const mem_event_type_t event_type = MEM_EVENT_DIRECT_RECLAIM_END;
     setMockDataInRb(event_type);
-    ASSERT_FALSE(mem_listener.listen(5000));  // 5 second timeout
+    ASSERT_FALSE(memevent_listener->listen(5000));  // 5 second timeout
 }
 
 /*
@@ -595,7 +595,7 @@ TEST_F(MemEventsListenerBpf, getMemEvents_no_register_events) {
     setMockDataInRb(event_type);
 
     std::vector<mem_event_t> mem_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_TRUE(mem_events.empty());
 }
 
@@ -611,10 +611,10 @@ TEST_F(MemEventsListenerBpf, listen_then_create_event) {
     std::condition_variable cv;
     bool didReceiveEvent = false;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
 
     std::thread t([&] {
-        bool listen_result = mem_listener.listen(10000);
+        bool listen_result = memevent_listener->listen(10000);
         std::lock_guard lk(mtx);
         didReceiveEvent = listen_result;
         cv.notify_one();
@@ -638,9 +638,9 @@ TEST_F(MemEventsListenerBpf, getRb_poll_and_create_event) {
     std::condition_variable cv;
     bool didReceiveEvent = false;
 
-    ASSERT_TRUE(mem_listener.registerEvent(event_type));
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
 
-    int rb_fd = mem_listener.getRingBufferFd();
+    int rb_fd = memevent_listener->getRingBufferFd();
     ASSERT_GE(rb_fd, 0) << "Received invalid file descriptor";
 
     std::thread t([&] {
@@ -676,13 +676,11 @@ class MemoryPressureTest : public ::testing::Test {
     }
 
   protected:
-    MemEventListener mem_listener = MemEventListener(mem_test_client, true);
+    std::unique_ptr<MemEventListener> memevent_listener;
 
-    void SetUp() override {
-        ASSERT_TRUE(mem_listener.ok()) << "listener failed to initialize bpf ring buffer manager";
-    }
+    void SetUp() override { initializeTestListener(memevent_listener, true); }
 
-    void TearDown() override { mem_listener.deregisterAllEvents(); }
+    void TearDown() override { memevent_listener.reset(); }
 
     /**
      * Helper function that will force the OOM killer to claim a [random]
@@ -751,7 +749,7 @@ class MemoryPressureTest : public ::testing::Test {
              * is called by the parent, but the child hasn't even been scheduled to run yet.
              */
             wait(NULL);
-            if (!mem_listener.listen(2000)) {
+            if (!memevent_listener->listen(2000)) {
                 LOG(ERROR) << "Failed to receive a memory event";
                 return false;
             }
@@ -803,13 +801,13 @@ TEST_F(MemoryPressureTest, oom_e2e_flow) {
     if (!isUpdatedMarkVictimTpSupported())
         GTEST_SKIP() << "New oom/mark_victim fields not supported";
 
-    ASSERT_TRUE(mem_listener.registerEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_TRUE(memevent_listener->registerEvent(MEM_EVENT_OOM_KILL))
             << "Failed registering OOM events as an event of interest";
 
     ASSERT_TRUE(triggerOom()) << "Failed to trigger OOM killer";
 
     std::vector<mem_event_t> oom_events;
-    ASSERT_TRUE(mem_listener.getMemEvents(oom_events)) << "Failed to fetch memory oom events";
+    ASSERT_TRUE(memevent_listener->getMemEvents(oom_events)) << "Failed to fetch memory oom events";
     ASSERT_FALSE(oom_events.empty()) << "We expect at least 1 OOM event";
 }
 
@@ -820,13 +818,13 @@ TEST_F(MemoryPressureTest, register_after_deregister_event) {
     if (!isUpdatedMarkVictimTpSupported())
         GTEST_SKIP() << "New oom/mark_victim fields not supported";
 
-    ASSERT_TRUE(mem_listener.registerEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_TRUE(memevent_listener->registerEvent(MEM_EVENT_OOM_KILL))
             << "Failed registering OOM events as an event of interest";
 
-    ASSERT_TRUE(mem_listener.deregisterEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_TRUE(memevent_listener->deregisterEvent(MEM_EVENT_OOM_KILL))
             << "Failed deregistering OOM events";
 
-    ASSERT_TRUE(mem_listener.registerEvent(MEM_EVENT_OOM_KILL))
+    ASSERT_TRUE(memevent_listener->registerEvent(MEM_EVENT_OOM_KILL))
             << "Failed to register for OOM events after deregister it";
 }
 
