@@ -14,23 +14,17 @@
 bpf {
     name: "bpfMemEvents.o",
     srcs: ["bpfMemEvents.c"],
+    btf: false,
     include_dirs: [
         "system/memory/libmeminfo/libmemevents/include",
-    ],
-    cflags: [
-        "-Wall",
-        "-Werror",
     ],
 }
 
 bpf {
     name: "bpfMemEventsTest.o",
     srcs: ["bpfMemEventsTest.c"],
+    btf: false,
     include_dirs: [
         "system/memory/libmeminfo/libmemevents/include",
-    ],
-    cflags: [
-        "-Wall",
-        "-Werror",
     ],
 }
