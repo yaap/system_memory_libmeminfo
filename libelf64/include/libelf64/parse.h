@@ -36,6 +36,7 @@ class Elf64Parser {
   public:
     // Parse the elf file and populate the elfBinary object.
     static bool ParseElfFile(const std::string& fileName, Elf64Binary& elfBinary);
+    static bool IsElf64(const std::string& fileName);
 
   private:
     static bool OpenElfFile(const std::string& fileName, std::ifstream& elfFile);
