@@ -171,6 +171,21 @@ bool Elf64Parser::ParseElfFile(const std::string& fileName, Elf64Binary& elf64Bi
     return ret;
 }
 
+bool Elf64Parser::IsElf64(const std::string& fileName) {
+    std::ifstream elfFile;
+    Elf64Binary elf64Binary;
+    bool ret = false;
+
+    if (OpenElfFile(fileName, elfFile) && ParseExecutableHeader(elfFile, elf64Binary) &&
+        IsElf64(elf64Binary)) {
+        ret = true;
+    }
+
+    CloseElfFile(elfFile);
+
+    return ret;
+}
+
 }  // namespace elf64
 }  // namespace android
 
