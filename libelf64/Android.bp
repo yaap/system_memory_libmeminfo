@@ -27,8 +27,9 @@ cc_library {
         "include",
     ],
     srcs: [
-        "parse.cpp",
+        "elf64_writer.cpp",
         "iter.cpp",
+        "parse.cpp",
     ],
     cflags: [
         "-Wall",
