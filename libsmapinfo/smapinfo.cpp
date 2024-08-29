@@ -1007,6 +1007,7 @@ static bool collect_vma(const Vma& vma) {
 
     VmaInfo& match = iter->second;
     add_mem_usage(&match.vma.usage, current.vma.usage);
+    match.count += 1;
     match.is_bss &= current.is_bss;
     return true;
 }
