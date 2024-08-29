@@ -74,6 +74,8 @@ class Elf64Binary {
     std::vector<Elf64_Shdr> shdrs;
     std::vector<Elf64_Sc> sections;
     std::string path;
+
+    bool IsElf64() { return ehdr.e_ident[EI_CLASS] == ELFCLASS64; }
 };
 
 }  // namespace elf64
