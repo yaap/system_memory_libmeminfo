@@ -17,6 +17,7 @@ bpf {
     include_dirs: [
         "system/memory/libmeminfo/libmemevents/include",
     ],
+    sub_dir: "memevents",
 }
 
 bpf {
@@ -25,4 +26,5 @@ bpf {
     include_dirs: [
         "system/memory/libmeminfo/libmemevents/include",
     ],
+    sub_dir: "memevents",
 }
