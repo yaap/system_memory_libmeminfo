@@ -39,3 +39,20 @@ cc_library {
         "-Werror",
     ],
 }
+
+cc_binary {
+    name: "geninvalelf64",
+    srcs: [
+        "invalid_elf64_gen.cpp",
+    ],
+    static_libs: [
+        "libelf64",
+    ],
+    shared_libs: [
+        "libbase",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+}
