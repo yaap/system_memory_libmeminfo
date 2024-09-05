@@ -35,23 +35,24 @@ typedef unsigned int mem_event_type_t;
 #define NR_MEM_EVENTS 5
 
 /* BPF-Rb Paths */
-#define MEM_EVENTS_AMS_RB "/sys/fs/bpf/map_bpfMemEvents_ams_rb"
-#define MEM_EVENTS_LMKD_RB "/sys/fs/bpf/map_bpfMemEvents_lmkd_rb"
-#define MEM_EVENTS_TEST_RB "/sys/fs/bpf/map_bpfMemEventsTest_rb"
+#define MEM_EVENTS_AMS_RB "/sys/fs/bpf/memevents/map_bpfMemEvents_ams_rb"
+#define MEM_EVENTS_LMKD_RB "/sys/fs/bpf/memevents/map_bpfMemEvents_lmkd_rb"
+#define MEM_EVENTS_TEST_RB "/sys/fs/bpf/memevents/map_bpfMemEventsTest_rb"
 
 /* BPF-Prog Paths */
 #define MEM_EVENTS_AMS_OOM_MARK_VICTIM_TP \
-    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_oom_mark_victim_ams"
+    "/sys/fs/bpf/memevents/prog_bpfMemEvents_tracepoint_oom_mark_victim_ams"
 #define MEM_EVENTS_LMKD_VMSCAN_DR_BEGIN_TP \
-    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd"
+    "/sys/fs/bpf/memevents/"               \
+    "prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd"
 #define MEM_EVENTS_LMKD_VMSCAN_DR_END_TP \
-    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd"
+    "/sys/fs/bpf/memevents/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd"
 #define MEM_EVENTS_LMKD_VMSCAN_KSWAPD_WAKE_TP \
-    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_wake_lmkd"
+    "/sys/fs/bpf/memevents/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_wake_lmkd"
 #define MEM_EVENTS_LMKD_VMSCAN_KSWAPD_SLEEP_TP \
-    "/sys/fs/bpf/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_sleep_lmkd"
+    "/sys/fs/bpf/memevents/prog_bpfMemEvents_tracepoint_vmscan_mm_vmscan_kswapd_sleep_lmkd"
 #define MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP \
-    "/sys/fs/bpf/prog_bpfMemEventsTest_tracepoint_oom_mark_victim"
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_tracepoint_oom_mark_victim"
 
 /* Struct to collect data from tracepoints */
 struct mem_event_t {
