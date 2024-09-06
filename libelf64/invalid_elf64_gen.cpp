@@ -64,6 +64,15 @@ void gen_lib_with_rwx_segment(const android::elf64::Elf64Binary& elf64Binary,
     android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
+// Generates a shared library with the size of the section headers as zero.
+void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
+                                 std::string newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+
+    copyElf64Binary.ehdr.e_shentsize = 0;
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
 void usage() {
     const std::string progname = getprogname();
 
@@ -96,6 +105,7 @@ int main(int argc, char* argv[]) {
         remove_needed_shared_libs(elf64Binary, libsToRemove);
 
         gen_lib_with_rwx_segment(elf64Binary, outputDir + "/libtest_invalid-rw_load_segment.so");
+        gen_lib_with_zero_shentsize(elf64Binary, outputDir + "/libtest_invalid-zero_shentsize.so");
     }
 
     return 0;
