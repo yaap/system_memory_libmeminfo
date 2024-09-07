@@ -22,13 +22,15 @@
 #include <memevents/bpf_types.h>
 
 /* BPF-Prog Paths */
-#define MEM_EVENTS_TEST_OOM_KILL_TP "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_oom_kill"
+#define MEM_EVENTS_TEST_OOM_KILL_TP "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_oom_kill"
 #define MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP \
-    "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_direct_reclaim_begin"
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_direct_reclaim_begin"
 #define MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP \
-    "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_direct_reclaim_end"
-#define MEM_EVENTS_TEST_KSWAPD_WAKE_TP "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_kswapd_wake"
-#define MEM_EVENTS_TEST_KSWAPD_SLEEP_TP "/sys/fs/bpf/prog_bpfMemEventsTest_skfilter_kswapd_sleep"
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_direct_reclaim_end"
+#define MEM_EVENTS_TEST_KSWAPD_WAKE_TP \
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_kswapd_wake"
+#define MEM_EVENTS_TEST_KSWAPD_SLEEP_TP \
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_kswapd_sleep"
 
 // clang-format off
 const struct mem_event_t mocked_oom_event = {

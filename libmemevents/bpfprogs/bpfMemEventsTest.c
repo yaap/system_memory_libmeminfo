@@ -22,10 +22,8 @@
 #include <memevents/bpf_types.h>
 #include <memevents/memevents_test.h>
 
-DEFINE_BPF_RINGBUF_EXT(rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID,
-                       AID_SYSTEM, 0660, DEFAULT_BPF_MAP_SELINUX_CONTEXT,
-                       DEFAULT_BPF_MAP_PIN_SUBDIR, PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER,
-                       LOAD_ON_ENG, LOAD_ON_USER, LOAD_ON_USERDEBUG)
+DEFINE_BPF_RINGBUF(rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID, AID_SYSTEM,
+                   0660)
 
 DEFINE_BPF_PROG("tracepoint/oom/mark_victim", AID_ROOT, AID_SYSTEM, tp_ams)
 (struct mark_victim_args* args) {
