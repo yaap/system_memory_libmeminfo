@@ -73,6 +73,15 @@ void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
     android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
+// Generates a shared library with invalid section header string table index.
+void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
+                                std::string newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+
+    copyElf64Binary.ehdr.e_shstrndx = 0;
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
 void usage() {
     const std::string progname = getprogname();
 
@@ -106,6 +115,7 @@ int main(int argc, char* argv[]) {
 
         gen_lib_with_rwx_segment(elf64Binary, outputDir + "/libtest_invalid-rw_load_segment.so");
         gen_lib_with_zero_shentsize(elf64Binary, outputDir + "/libtest_invalid-zero_shentsize.so");
+        gen_lib_with_zero_shstrndx(elf64Binary, outputDir + "/libtest_invalid-zero_shstrndx.so");
     }
 
     return 0;
