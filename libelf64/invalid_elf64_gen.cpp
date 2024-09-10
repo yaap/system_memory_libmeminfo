@@ -73,6 +73,46 @@ void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
     android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
+// Generates a shared library with invalid section header string table index.
+void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
+                                std::string newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+
+    copyElf64Binary.ehdr.e_shstrndx = 0;
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
+// Generates a shared library with text relocations set in DT_FLAGS dynamic
+// entry. For example:
+//
+//  $ readelf -d libtest_invalid-textrels.so | grep TEXTREL
+//  0x000000000000001e (FLAGS)              TEXTREL BIND_NOW
+void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64Binary,
+                                       std::string newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    std::vector<Elf64_Dyn> dynEntries;
+    bool found = false;
+
+    copyElf64Binary.AppendDynamicEntries(&dynEntries);
+    for (int i = 0; i < dynEntries.size(); i++) {
+        if (dynEntries[i].d_tag == DT_FLAGS) {
+            // Indicate that binary contains text relocations.
+            dynEntries[i].d_un.d_val |= DF_TEXTREL;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        std::cerr << "Unable to set text relocations in DT_FLAGS. File " << newSharedLibName
+                  << " not created." << std::endl;
+        return;
+    }
+
+    copyElf64Binary.SetDynamicEntries(&dynEntries);
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
 void usage() {
     const std::string progname = getprogname();
 
@@ -106,6 +146,8 @@ int main(int argc, char* argv[]) {
 
         gen_lib_with_rwx_segment(elf64Binary, outputDir + "/libtest_invalid-rw_load_segment.so");
         gen_lib_with_zero_shentsize(elf64Binary, outputDir + "/libtest_invalid-zero_shentsize.so");
+        gen_lib_with_zero_shstrndx(elf64Binary, outputDir + "/libtest_invalid-zero_shstrndx.so");
+        gen_lib_with_text_relocs_in_flags(elf64Binary, outputDir + "/libtest_invalid-textrels.so");
     }
 
     return 0;
