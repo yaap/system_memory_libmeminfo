@@ -30,7 +30,7 @@
 // In order to remove the sharedLibs from the .dynamic
 // section, it sets the Elf64_Dyn.d_tag to DT_DEBUG.
 void remove_needed_shared_libs(android::elf64::Elf64Binary& elf64Binary,
-                               std::set<std::string>& sharedLibs) {
+                               const std::set<std::string>& sharedLibs) {
     std::vector<Elf64_Dyn> dynEntries;
 
     elf64Binary.AppendDynamicEntries(&dynEntries);
@@ -58,7 +58,7 @@ void set_exec_segments_as_rwx(android::elf64::Elf64Binary& elf64Binary) {
 
 // Generates a shared library with the executable segments as read/write/exec.
 void gen_lib_with_rwx_segment(const android::elf64::Elf64Binary& elf64Binary,
-                              std::string newSharedLibName) {
+                              const std::string& newSharedLibName) {
     android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
     set_exec_segments_as_rwx(copyElf64Binary);
     android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
@@ -66,7 +66,7 @@ void gen_lib_with_rwx_segment(const android::elf64::Elf64Binary& elf64Binary,
 
 // Generates a shared library with the size of the section headers as zero.
 void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
-                                 std::string newSharedLibName) {
+                                 const std::string& newSharedLibName) {
     android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
 
     copyElf64Binary.ehdr.e_shentsize = 0;
@@ -75,7 +75,7 @@ void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
 
 // Generates a shared library with invalid section header string table index.
 void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
-                                std::string newSharedLibName) {
+                                const std::string& newSharedLibName) {
     android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
 
     copyElf64Binary.ehdr.e_shstrndx = 0;
@@ -88,7 +88,7 @@ void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
 //  $ readelf -d libtest_invalid-textrels.so | grep TEXTREL
 //  0x000000000000001e (FLAGS)              TEXTREL BIND_NOW
 void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64Binary,
-                                       std::string newSharedLibName) {
+                                       const std::string& newSharedLibName) {
     android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
     std::vector<Elf64_Dyn> dynEntries;
     bool found = false;
@@ -106,6 +106,36 @@ void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64B
     if (!found) {
         std::cerr << "Unable to set text relocations in DT_FLAGS. File " << newSharedLibName
                   << " not created." << std::endl;
+        return;
+    }
+
+    copyElf64Binary.SetDynamicEntries(&dynEntries);
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
+// Generates a shared library with a DT_TEXTREL dynamic entry.
+// For example:
+//
+// $ readelf -d arm64/libtest_invalid-textrels2.so  | grep TEXTREL
+// 0x0000000000000016 (TEXTREL)            0x0
+void gen_lib_with_text_relocs_dyn_entry(const android::elf64::Elf64Binary& elf64Binary,
+                                        const std::string& newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    std::vector<Elf64_Dyn> dynEntries;
+    bool found = false;
+
+    copyElf64Binary.AppendDynamicEntries(&dynEntries);
+    for (int i = 0; i < dynEntries.size(); i++) {
+        if (dynEntries[i].d_tag == DT_FLAGS) {
+            dynEntries[i].d_tag = DT_TEXTREL;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        std::cerr << "Unable to create shared library with DT_TEXTREL dynamic entry. File "
+                  << newSharedLibName << " not created." << std::endl;
         return;
     }
 
@@ -148,6 +178,8 @@ int main(int argc, char* argv[]) {
         gen_lib_with_zero_shentsize(elf64Binary, outputDir + "/libtest_invalid-zero_shentsize.so");
         gen_lib_with_zero_shstrndx(elf64Binary, outputDir + "/libtest_invalid-zero_shstrndx.so");
         gen_lib_with_text_relocs_in_flags(elf64Binary, outputDir + "/libtest_invalid-textrels.so");
+        gen_lib_with_text_relocs_dyn_entry(elf64Binary,
+                                           outputDir + "/libtest_invalid-textrels2.so");
     }
 
     return 0;
