@@ -18,6 +18,7 @@
 #include <mntent.h>
 #include <gtest/gtest.h>
 
+#include <regex>
 #include <set>
 
 #include <libelf64/iter.h>
@@ -31,6 +32,19 @@ constexpr char kLowRamProp[] = "ro.config.low_ram";
 constexpr char kVendorApiLevelProp[] = "ro.vendor.api_level";
 // 16KB by default (unsupported devices must explicitly opt-out)
 constexpr size_t kRequiredMaxSupportedPageSize = 0x4000;
+
+static inline std::string escapeForRegex(const std::string& str) {
+  // Regex metacharacters to be escaped
+  static const std::regex specialChars(R"([.^$|(){}\[\]+*?\\])");
+
+  // Replace each special character with its escaped version
+  return std::regex_replace(str, specialChars, R"(\$&)");
+}
+
+static inline bool startsWithPattern(const std::string& str, const std::string& pattern) {
+    std::regex _pattern("^" + pattern + ".*");
+    return std::regex_match(str, _pattern);
+}
 
 static std::set<std::string> GetMounts() {
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
@@ -61,21 +75,23 @@ static std::set<std::string> GetMounts() {
 class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
   protected:
     static void LoadAlignmentCb(const android::elf64::Elf64Binary& elf) {
-      static constexpr std::array ignored_directories{
+      static std::array ignored_directories{
         // Ignore VNDK APEXes. They are prebuilts from old branches, and would
         // only be used on devices with old vendor images.
-        "/apex/com.android.vndk.v",
-        // This directory contains the trusty kernel.
-        // TODO(b/365240530): Remove this once 16K pages will work on the trusty kernel.
-        "/system_ext/etc/hw/",
+        escapeForRegex("/apex/com.android.vndk.v"),
+        // Ignore Trusty VM images as they don't run in userspace, so 16K is not
+        // required. See b/365240530 for more context.
+        escapeForRegex("/system_ext/etc/vm/trusty_vm"),
         // Ignore non-Android firmware images.
-        "/odm/firmware",
-        "/vendor/firmware",
-        "/vendor/firmware_mnt/image"
+        escapeForRegex("/odm/firmware/"),
+        escapeForRegex("/vendor/firmware/"),
+        escapeForRegex("/vendor/firmware_mnt/image"),
+        // Ignore TEE binaries ("glob: /apex/com.*.android.authfw.ta*")
+        escapeForRegex("/apex/com.") + ".*" + escapeForRegex(".android.authfw.ta")
       };
 
-      for (const auto& dir : ignored_directories) {
-        if (elf.path.starts_with(dir)) {
+      for (const auto& pattern : ignored_directories) {
+        if (startsWithPattern(elf.path, pattern)) {
           return;
         }
       }

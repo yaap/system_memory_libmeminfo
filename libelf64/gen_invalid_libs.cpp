@@ -15,8 +15,8 @@
  */
 
 #include <libelf64/elf64.h>
-#include <libelf64/elf64_writer.h>
 #include <libelf64/parse.h>
+#include <libelf64/writer.h>
 
 #include <iostream>
 #include <set>
@@ -159,14 +159,12 @@ void gen_lib_with_empty_shdr_table(const android::elf64::Elf64Binary& elf64Binar
     android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
-// Generates a shared library which executable header has an invalid
-// section header offset.
-void gen_lib_with_unaligned_shdr_offset(const android::elf64::Elf64Binary& elf64Binary,
-                                        const std::string& newSharedLibName) {
+void set_shdr_table_offset(const android::elf64::Elf64Binary& elf64Binary,
+                           const std::string& newSharedLibName, const Elf64_Off invalidOffset) {
     android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
 
     // Set an invalid offset for the section headers.
-    copyElf64Binary.ehdr.e_shoff = copyElf64Binary.ehdr.e_shoff + 1;
+    copyElf64Binary.ehdr.e_shoff = invalidOffset;
 
     std::cout << "Writing ELF64 binary to file " << newSharedLibName << std::endl;
     android::elf64::Elf64Writer elf64Writer(newSharedLibName);
@@ -178,13 +176,48 @@ void gen_lib_with_unaligned_shdr_offset(const android::elf64::Elf64Binary& elf64
     elf64Writer.WriteSectionHeaders(copyElf64Binary.shdrs, elf64Binary.ehdr.e_shoff);
 }
 
+// Generates a shared library which executable header has an invalid
+// section header offset.
+void gen_lib_with_unaligned_shdr_offset(const android::elf64::Elf64Binary& elf64Binary,
+                                        const std::string& newSharedLibName) {
+    const Elf64_Off unalignedOffset = elf64Binary.ehdr.e_shoff + 1;
+    set_shdr_table_offset(elf64Binary, newSharedLibName, unalignedOffset);
+}
+
+// Generates a shared library which executable header has ZERO as
+// section header offset.
+void gen_lib_with_zero_shdr_table_offset(const android::elf64::Elf64Binary& elf64Binary,
+                                         const std::string& newSharedLibName) {
+    const Elf64_Off zeroOffset = 0;
+    set_shdr_table_offset(elf64Binary, newSharedLibName, zeroOffset);
+}
+
+// Generates a shared library which section headers are all ZERO.
+void gen_lib_with_zero_shdr_table_content(const android::elf64::Elf64Binary& elf64Binary,
+                                          const std::string& newSharedLibName) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+
+    std::cout << "Writing ELF64 binary to file " << newSharedLibName << std::endl;
+    android::elf64::Elf64Writer elf64Writer(newSharedLibName);
+    elf64Writer.WriteHeader(copyElf64Binary.ehdr);
+    elf64Writer.WriteProgramHeaders(copyElf64Binary.phdrs, copyElf64Binary.ehdr.e_phoff);
+    elf64Writer.WriteSections(copyElf64Binary.sections, copyElf64Binary.shdrs);
+
+    // Make the content of Elf64_Shdr zero.
+    for (int i = 0; i < copyElf64Binary.shdrs.size(); i++) {
+        copyElf64Binary.shdrs[i] = {0};
+    }
+
+    elf64Writer.WriteSectionHeaders(copyElf64Binary.shdrs, elf64Binary.ehdr.e_shoff);
+}
+
 void usage() {
     const std::string progname = getprogname();
 
     std::cout << "Usage: " << progname << " [shared_lib] [out_dir]...\n"
               << R"(
 Options:
-shared_lib       shared library that will be used as reference.
+shared_lib       elf64 shared library that will be used as reference.
 out_dir          the invalid shared libraries that are
                  generated will be placed in this directory.)"
               << std::endl;
@@ -219,6 +252,10 @@ int main(int argc, char* argv[]) {
                                       outputDir + "/libtest_invalid-empty_shdr_table.so");
         gen_lib_with_unaligned_shdr_offset(elf64Binary,
                                            outputDir + "/libtest_invalid-unaligned_shdr_offset.so");
+        gen_lib_with_zero_shdr_table_content(
+                elf64Binary, outputDir + "/libtest_invalid-zero_shdr_table_content.so");
+        gen_lib_with_zero_shdr_table_offset(
+                elf64Binary, outputDir + "/libtest_invalid-zero_shdr_table_offset.so");
     }
 
     return 0;

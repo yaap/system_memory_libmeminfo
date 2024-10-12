@@ -27,7 +27,7 @@ cc_library {
         "include",
     ],
     srcs: [
-        "elf64_writer.cpp",
+        "writer.cpp",
         "iter.cpp",
         "parse.cpp",
     ],
@@ -41,9 +41,9 @@ cc_library {
 }
 
 cc_binary {
-    name: "geninvalelf64",
+    name: "gen_invalid_libs",
     srcs: [
-        "invalid_elf64_gen.cpp",
+        "gen_invalid_libs.cpp",
     ],
     static_libs: [
         "libelf64",

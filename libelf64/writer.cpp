@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <libelf64/elf64_writer.h>
+#include <libelf64/writer.h>
 
 #include <libelf64/elf64.h>
 
