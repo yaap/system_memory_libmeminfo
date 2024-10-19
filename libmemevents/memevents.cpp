@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -335,6 +336,9 @@ void MemEventListener::deregisterAllEvents() {
 }
 
 bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
+    // Ensure consuming from the BPF ring buffer is thread safe.
+    std::lock_guard<std::mutex> lock(mRingBufMutex);
+
     if (!ok()) {
         LOG(ERROR) << "memevent failed getting memory events, failure to initialize";
         return false;

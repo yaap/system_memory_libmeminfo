@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <android-base/thread_annotations.h>
+
 #include <memory>
 #include <vector>
 
@@ -130,7 +132,12 @@ class MemEventListener final {
     bool mEventsRegistered[NR_MEM_EVENTS];
     int mNumEventsRegistered;
     MemEventClient mClient;
-    std::unique_ptr<MemBpfRingbuf> memBpfRb;
+    /*
+     * BFP ring buffer is designed as single producer single consumer.
+     * Protect against concurrent accesses.
+     */
+    std::mutex mRingBufMutex;
+    std::unique_ptr<MemBpfRingbuf> memBpfRb GUARDED_BY(mRingBufMutex);
     bool mAttachTpForTests;
 
     bool isValidEventType(mem_event_type_t event_type) const;

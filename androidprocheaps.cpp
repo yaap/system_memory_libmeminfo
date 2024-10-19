@@ -99,11 +99,11 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
                 sub_heap = HEAP_ART_APP;
             }
             is_swappable = true;
+        } else if (name.find("kgsl-3d0") != std::string::npos) {
+            which_heap = HEAP_GL_DEV;
         } else if (base::StartsWith(name, "/dev/")) {
             which_heap = HEAP_UNKNOWN_DEV;
-            if (base::StartsWith(name, "/dev/kgsl-3d0")) {
-                which_heap = HEAP_GL_DEV;
-            } else if (base::StartsWith(name, "/dev/ashmem/CursorWindow")) {
+            if (base::StartsWith(name, "/dev/ashmem/CursorWindow")) {
                 which_heap = HEAP_CURSOR;
             } else if (base::StartsWith(name, "/dev/ashmem/jit-zygote-cache")) {
                 which_heap = HEAP_DALVIK_OTHER;
