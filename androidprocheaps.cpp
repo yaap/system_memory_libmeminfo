@@ -15,7 +15,6 @@
  */
 
 #include <android-base/stringprintf.h>
-#include <android-base/strings.h>
 
 #include "meminfo_private.h"
 
@@ -38,43 +37,43 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
         int sub_heap = HEAP_UNKNOWN;
         bool is_swappable = false;
         std::string name;
-        if (base::EndsWith(vma.name, " (deleted)")) {
+        if (vma.name.ends_with(" (deleted)")) {
             name = vma.name.substr(0, vma.name.size() - strlen(" (deleted)"));
         } else {
             name = vma.name;
         }
 
         uint32_t namesz = name.size();
-        if (base::StartsWith(name, "[heap]")) {
+        if (name.starts_with("[heap]")) {
             which_heap = HEAP_NATIVE;
-        } else if (base::StartsWith(name, "[anon:libc_malloc]")) {
+        } else if (name.starts_with("[anon:libc_malloc]")) {
             which_heap = HEAP_NATIVE;
-        } else if (base::StartsWith(name, "[anon:scudo:")) {
+        } else if (name.starts_with("[anon:scudo:")) {
             which_heap = HEAP_NATIVE;
-        } else if (base::StartsWith(name, "[anon:GWP-ASan")) {
+        } else if (name.starts_with("[anon:GWP-ASan")) {
             which_heap = HEAP_NATIVE;
-        } else if (base::StartsWith(name, "[stack")) {
+        } else if (name.starts_with("[stack")) {
             which_heap = HEAP_STACK;
-        } else if (base::StartsWith(name, "[anon:stack_and_tls:")) {
+        } else if (name.starts_with("[anon:stack_and_tls:")) {
             which_heap = HEAP_STACK;
-        } else if (base::EndsWith(name, ".so")) {
+        } else if (name.ends_with(".so")) {
             which_heap = HEAP_SO;
             is_swappable = true;
-        } else if (base::EndsWith(name, ".jar")) {
+        } else if (name.ends_with(".jar")) {
             which_heap = HEAP_JAR;
             is_swappable = true;
-        } else if (base::EndsWith(name, ".apk")) {
+        } else if (name.ends_with(".apk")) {
             which_heap = HEAP_APK;
             is_swappable = true;
-        } else if (base::EndsWith(name, ".ttf")) {
+        } else if (name.ends_with(".ttf")) {
             which_heap = HEAP_TTF;
             is_swappable = true;
-        } else if ((base::EndsWith(name, ".odex")) ||
+        } else if ((name.ends_with(".odex")) ||
                    (namesz > 4 && strstr(name.c_str(), ".dex") != nullptr)) {
             which_heap = HEAP_DEX;
             sub_heap = HEAP_DEX_APP_DEX;
             is_swappable = true;
-        } else if (base::EndsWith(name, ".vdex")) {
+        } else if (name.ends_with(".vdex")) {
             which_heap = HEAP_DEX;
             // Handle system@framework@boot and system/framework/boot|apex
             if ((strstr(name.c_str(), "@boot") != nullptr) ||
@@ -85,10 +84,10 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
                 sub_heap = HEAP_DEX_APP_VDEX;
             }
             is_swappable = true;
-        } else if (base::EndsWith(name, ".oat")) {
+        } else if (name.ends_with(".oat")) {
             which_heap = HEAP_OAT;
             is_swappable = true;
-        } else if (base::EndsWith(name, ".art") || base::EndsWith(name, ".art]")) {
+        } else if (name.ends_with(".art") || name.ends_with(".art]")) {
             which_heap = HEAP_ART;
             // Handle system@framework@boot* and system/framework/boot|apex*
             if ((strstr(name.c_str(), "@boot") != nullptr) ||
@@ -101,49 +100,49 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
             is_swappable = true;
         } else if (name.find("kgsl-3d0") != std::string::npos) {
             which_heap = HEAP_GL_DEV;
-        } else if (base::StartsWith(name, "/dev/")) {
+        } else if (name.starts_with("/dev/")) {
             which_heap = HEAP_UNKNOWN_DEV;
-            if (base::StartsWith(name, "/dev/ashmem/CursorWindow")) {
+            if (name.starts_with("/dev/ashmem/CursorWindow")) {
                 which_heap = HEAP_CURSOR;
-            } else if (base::StartsWith(name, "/dev/ashmem/jit-zygote-cache")) {
+            } else if (name.starts_with("/dev/ashmem/jit-zygote-cache")) {
                 which_heap = HEAP_DALVIK_OTHER;
                 sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
-            } else if (base::StartsWith(name, "/dev/ashmem")) {
+            } else if (name.starts_with("/dev/ashmem")) {
                 which_heap = HEAP_ASHMEM;
             }
-        } else if (base::StartsWith(name, "/memfd:jit-cache")) {
+        } else if (name.starts_with("/memfd:jit-cache")) {
             which_heap = HEAP_DALVIK_OTHER;
             sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
-        } else if (base::StartsWith(name, "/memfd:jit-zygote-cache")) {
+        } else if (name.starts_with("/memfd:jit-zygote-cache")) {
             which_heap = HEAP_DALVIK_OTHER;
             sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
-        } else if (base::StartsWith(name, "[anon:")) {
+        } else if (name.starts_with("[anon:")) {
             which_heap = HEAP_UNKNOWN;
-            if (base::StartsWith(name, "[anon:dalvik-")) {
+            if (name.starts_with("[anon:dalvik-")) {
                 which_heap = HEAP_DALVIK_OTHER;
-                if (base::StartsWith(name, "[anon:dalvik-LinearAlloc")) {
+                if (name.starts_with("[anon:dalvik-LinearAlloc")) {
                     sub_heap = HEAP_DALVIK_OTHER_LINEARALLOC;
-                } else if (base::StartsWith(name, "[anon:dalvik-alloc space") ||
-                           base::StartsWith(name, "[anon:dalvik-main space")) {
+                } else if (name.starts_with("[anon:dalvik-alloc space") ||
+                           name.starts_with("[anon:dalvik-main space")) {
                     // This is the regular Dalvik heap.
                     which_heap = HEAP_DALVIK;
                     sub_heap = HEAP_DALVIK_NORMAL;
-                } else if (base::StartsWith(name, "[anon:dalvik-large object space") ||
-                           base::StartsWith(name, "[anon:dalvik-free list large object space")) {
+                } else if (name.starts_with("[anon:dalvik-large object space") ||
+                           name.starts_with("[anon:dalvik-free list large object space")) {
                     which_heap = HEAP_DALVIK;
                     sub_heap = HEAP_DALVIK_LARGE;
-                } else if (base::StartsWith(name, "[anon:dalvik-non moving space")) {
+                } else if (name.starts_with("[anon:dalvik-non moving space")) {
                     which_heap = HEAP_DALVIK;
                     sub_heap = HEAP_DALVIK_NON_MOVING;
-                } else if (base::StartsWith(name, "[anon:dalvik-zygote space")) {
+                } else if (name.starts_with("[anon:dalvik-zygote space")) {
                     which_heap = HEAP_DALVIK;
                     sub_heap = HEAP_DALVIK_ZYGOTE;
-                } else if (base::StartsWith(name, "[anon:dalvik-indirect ref")) {
+                } else if (name.starts_with("[anon:dalvik-indirect ref")) {
                     sub_heap = HEAP_DALVIK_OTHER_INDIRECT_REFERENCE_TABLE;
-                } else if (base::StartsWith(name, "[anon:dalvik-jit-code-cache") ||
-                           base::StartsWith(name, "[anon:dalvik-data-code-cache")) {
+                } else if (name.starts_with("[anon:dalvik-jit-code-cache") ||
+                           name.starts_with("[anon:dalvik-data-code-cache")) {
                     sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
-                } else if (base::StartsWith(name, "[anon:dalvik-CompilerMetadata")) {
+                } else if (name.starts_with("[anon:dalvik-CompilerMetadata")) {
                     sub_heap = HEAP_DALVIK_OTHER_COMPILER_METADATA;
                 } else {
                     sub_heap = HEAP_DALVIK_OTHER_ACCOUNTING;  // Default to accounting.

@@ -32,7 +32,6 @@
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/stringprintf.h>
-#include <android-base/strings.h>
 #include <procinfo/process_map.h>
 
 #include <dmabufinfo/dmabuf_sysfs_stats.h>
@@ -42,7 +41,7 @@ namespace android {
 namespace dmabufinfo {
 
 static bool FileIsDmaBuf(const std::string& path) {
-    return ::android::base::StartsWith(path, "/dmabuf");
+    return path.starts_with("/dmabuf");
 }
 
 enum FdInfoResult {

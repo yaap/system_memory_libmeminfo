@@ -42,7 +42,6 @@
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
 #include <android-base/stringprintf.h>
-#include <android-base/strings.h>
 #include <android-base/unique_fd.h>
 #include <dmabufinfo/dmabuf_sysfs_stats.h>
 

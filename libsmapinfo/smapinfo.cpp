@@ -31,7 +31,6 @@
 #include <android-base/file.h>
 #include <android-base/parseint.h>
 #include <android-base/stringprintf.h>
-#include <android-base/strings.h>
 #include <meminfo/sysmeminfo.h>
 
 #include <processrecord.h>
@@ -538,8 +537,7 @@ static bool populate_libs(struct params* params, uint64_t pgflags, uint64_t pgfl
         LibProcRecord record(proc);
         for (const Vma& map : maps) {
             // Skip library/map if the prefix for the path doesn't match.
-            if (!params->lib_prefix.empty() &&
-                !::android::base::StartsWith(map.name, params->lib_prefix)) {
+            if (!params->lib_prefix.empty() && !map.name.starts_with(params->lib_prefix)) {
                 continue;
             }
             // Skip excluded library/map names.
@@ -925,7 +923,7 @@ void VmaInfo::to_json(bool total, std::ostream& out) const {
 }
 
 static bool is_library(const std::string& name) {
-    return (name.size() > 4) && (name[0] == '/') && ::android::base::EndsWith(name, ".so");
+    return (name.size() > 4) && (name[0] == '/') && name.ends_with(".so");
 }
 
 static void infer_vma_name(VmaInfo& current, const VmaInfo& recent) {
