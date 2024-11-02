@@ -345,8 +345,11 @@ bool MemEventListener::getMemEvents(std::vector<mem_event_t>& mem_events) {
     }
 
     base::Result<int> ret = memBpfRb->ConsumeAll([&](const mem_event_t& mem_event) {
-        if (isValidEventType(mem_event.type) && mEventsRegistered[mem_event.type])
-            mem_events.emplace_back(mem_event);
+        if (!isValidEventType(mem_event.type))
+            LOG(FATAL) << "Unexpected mem_event type: this should never happen: "
+                       << "there is likely data corruption due to memory ordering";
+
+        if (mEventsRegistered[mem_event.type]) mem_events.emplace_back(mem_event);
     });
 
     if (!ret.ok()) {

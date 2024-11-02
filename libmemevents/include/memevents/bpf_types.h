@@ -62,7 +62,7 @@ struct mem_event_t {
         struct OomKill {
             uint32_t pid;
             uint64_t timestamp_ms;
-            uint64_t oom_score_adj;
+            short oom_score_adj;
             uint32_t uid;
             char process_name[MEM_EVENT_PROC_NAME_LEN];
             uint64_t total_vm_kb;
