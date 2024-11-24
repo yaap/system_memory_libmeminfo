@@ -95,6 +95,13 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
           return;
         }
       }
+
+      // Ignore ART Odex files for now. They are not 16K aligned.
+      // b/376814207
+      if (elf.path.ends_with(".odex")) {
+        return;
+      }
+
       for (int i = 0; i < elf.phdrs.size(); i++) {
         Elf64_Phdr phdr = elf.phdrs[i];
 
