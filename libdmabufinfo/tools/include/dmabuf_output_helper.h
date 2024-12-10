@@ -98,14 +98,15 @@ class CsvOutput final : public DmabufOutputHelper {
     // Per Process
     void PerProcessHeader(const std::string& process, const pid_t pid) override {
         printf("\t%s:%d\n", process.c_str(), pid);
-        printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n", "Name", "Rss(kB)", "Pss(kB)", "nr_procs",
-               "Inode");
+        printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+               "Name", "Rss(kB)", "Pss(kB)", "nr_procs", "Inode", "Exporter");
     }
 
     void PerProcessBufStats(const android::dmabufinfo::DmaBuffer& buf) override {
-        printf("\"%s\",%" PRIu64 ",%" PRIu64 ",%zu,%" PRIuMAX "\n",
+        printf("\"%s\",%" PRIu64 ",%" PRIu64 ",%zu,%" PRIuMAX  ",%s" "\n",
                buf.name().empty() ? "<unknown>" : buf.name().c_str(), buf.size() / 1024,
-               buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()));
+               buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()),
+               buf.exporter().empty() ? "<unknown>" : buf.exporter().c_str());
     }
 
     void PerProcessTotalStat(const uint64_t pss, const uint64_t rss) override {
@@ -184,13 +185,15 @@ class RawOutput final : public DmabufOutputHelper {
     // PerProcess
     void PerProcessHeader(const std::string& process, const pid_t pid) override {
         printf("%16s:%-5d\n", process.c_str(), pid);
-        printf("%22s %16s %16s %16s %16s\n", "Name", "Rss", "Pss", "nr_procs", "Inode");
+        printf("%22s %16s %16s %16s %16s %22s\n",
+               "Name", "Rss", "Pss", "nr_procs", "Inode", "Exporter");
     }
 
     void PerProcessBufStats(const android::dmabufinfo::DmaBuffer& buf) override {
-        printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16zu %16" PRIuMAX "\n",
+        printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16zu %16" PRIuMAX "  %22s" "\n",
                buf.name().empty() ? "<unknown>" : buf.name().c_str(), buf.size() / 1024,
-               buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()));
+               buf.Pss() / 1024, buf.pids().size(), static_cast<uintmax_t>(buf.inode()),
+               buf.exporter().empty() ? "<unknown>" : buf.exporter().c_str());
     }
     void PerProcessTotalStat(const uint64_t pss, const uint64_t rss) override {
         printf("%22s %13" PRIu64 " kB %13" PRIu64 " kB %16s\n", "PROCESS TOTAL", rss / 1024,
