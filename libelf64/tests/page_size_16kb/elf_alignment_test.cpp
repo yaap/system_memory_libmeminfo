@@ -65,6 +65,9 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
         // Ignore VNDK APEXes. They are prebuilts from old branches, and would
         // only be used on devices with old vendor images.
         "/apex/com.android.vndk.v",
+        // This directory contains the trusty kernel.
+        // TODO(b/365240530): Remove this once 16K pages will work on the trusty kernel.
+        "/system_ext/etc/hw/",
         // Ignore non-Android firmware images.
         "/odm/firmware",
         "/vendor/firmware",
@@ -100,11 +103,11 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
     }
 
     void SetUp() override {
-      if (VendorApiLevel() < __ANDROID_API_V__) {
-        GTEST_SKIP() << "16kB support is only required on V and later releases.";
-      } else if (IsLowRamDevice()) {
-        GTEST_SKIP() << "Low Ram devices only support 4kB page size";
-      }
+        if (VendorApiLevel() < 202404) {
+            GTEST_SKIP() << "16kB support is only required on V and later releases.";
+        } else if (IsLowRamDevice()) {
+            GTEST_SKIP() << "Low Ram devices only support 4kB page size";
+        }
     }
 };
 
