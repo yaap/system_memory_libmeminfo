@@ -471,5 +471,42 @@ bool ReadGpuTotalUsageKb(uint64_t* size) {
     return ReadProcessGpuUsageKb(0, 0, size);
 }
 
+bool ReadKernelCmaUsageKb(uint64_t* size, const std::string& cma_stats_sysfs_path) {
+    uint64_t totalKernelCmaUsageKb = 0;
+    std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(cma_stats_sysfs_path.c_str()), closedir);
+    if (!dir) {
+        LOG(ERROR) << "Failed to open CMA sysfs stats directory: " << cma_stats_sysfs_path;
+        return false;
+    }
+
+    struct dirent* dent;
+    while ((dent = readdir(dir.get()))) {
+        if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
+
+        uint64_t allocPagesSuccess;
+        std::string allocPagesSuccessPath = ::android::base::StringPrintf(
+                                                "%s/%s/alloc_pages_success",
+                                                cma_stats_sysfs_path.c_str(),
+                                                dent->d_name);
+        if (!ReadSysfsFile(allocPagesSuccessPath, &allocPagesSuccess)) return false;
+
+        uint64_t releasePagesSuccess;
+        std::string releasePagesSuccessPath = ::android::base::StringPrintf(
+                                                "%s/%s/release_pages_success",
+                                                cma_stats_sysfs_path.c_str(),
+                                                dent->d_name);
+        if (!ReadSysfsFile(releasePagesSuccessPath, &releasePagesSuccess)) return false;
+
+        totalKernelCmaUsageKb += allocPagesSuccess - releasePagesSuccess;
+    }
+
+    totalKernelCmaUsageKb *= getpagesize() / 1024;
+    if (size) {
+        *size = totalKernelCmaUsageKb;
+    }
+
+    return true;
+}
+
 }  // namespace meminfo
 }  // namespace android

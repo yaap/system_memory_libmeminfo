@@ -1232,6 +1232,40 @@ TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
     EXPECT_TRUE(size >= 0);
 }
 
+class CmaSysfsStats : public ::testing::Test {
+  public:
+    virtual void SetUp() {
+        fs::current_path(fs::temp_directory_path());
+        cma_sysfs_stats_path = fs::current_path() / "cma_sysfs_stats";
+        ASSERT_TRUE(fs::create_directory(cma_sysfs_stats_path));
+        test_region_path = cma_sysfs_stats_path / "test_region";
+        ASSERT_TRUE(fs::create_directory(test_region_path));
+    }
+    virtual void TearDown() {
+        fs::remove_all(test_region_path);
+        fs::remove_all(cma_sysfs_stats_path);
+    }
+
+    fs::path test_region_path;
+    fs::path cma_sysfs_stats_path;
+};
+
+TEST_F(CmaSysfsStats, TestReadKernelCmaUsageKb) {
+    auto pages_allocated_success_path = test_region_path / "alloc_pages_success";
+    const std::string pages_allocated_success = "8";
+    ASSERT_TRUE(android::base::WriteStringToFile(pages_allocated_success,
+                                                 pages_allocated_success_path));
+
+    auto pages_released_success_path = test_region_path / "release_pages_success";
+    const std::string pages_released_success = "4";
+    ASSERT_TRUE(android::base::WriteStringToFile(pages_released_success,
+                                                 pages_released_success_path));
+
+    uint64_t size;
+    ASSERT_TRUE(ReadKernelCmaUsageKb(&size, cma_sysfs_stats_path));
+    ASSERT_EQ(size, (4 * getpagesize()) / 1024);
+}
+
 TEST(AndroidProcHeaps, ExtractAndroidHeapStatsFromFileTest) {
     std::string smaps =
             R"smaps(12c00000-13440000 rw-p 00000000 00:00 0  [anon:dalvik-main space (region space)]

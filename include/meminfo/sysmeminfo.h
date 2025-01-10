@@ -162,5 +162,9 @@ bool ReadDmabufHeapTotalExportedKb(
         uint64_t* size, const std::string& dma_heap_root = kDmabufHeapRoot,
         const std::string& dma_buf_sysfs_path = "/sys/kernel/dmabuf/buffers");
 
+// Read total amount of memory in kb allocated by kernel drivers through CMA.
+bool ReadKernelCmaUsageKb(uint64_t* size,
+                          const std::string& cma_stats_sysfs_path = "/sys/kernel/mm/cma");
+
 }  // namespace meminfo
 }  // namespace android
