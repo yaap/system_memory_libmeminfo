@@ -113,13 +113,6 @@ bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
                        const std::string& procfs_path = "/proc",
                        const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
 
-
-
-// Get the DMA buffers PSS contribution for the specified @pid
-// Returns true on success, false otherwise
-bool ReadDmaBufPss(int pid, uint64_t* pss, const std::string& procfs_path = "/proc",
-                   const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
-
 // Writes DmaBuffer info into an existing vector (which will be cleared first.)
 // Will include all DmaBuffers, whether thay are retained or mapped.
 // Returns true on success, otherwise false.
