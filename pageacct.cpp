@@ -32,12 +32,19 @@ static inline off64_t pfn_to_idle_bitmap_offset(uint64_t pfn) {
     return static_cast<off64_t>((pfn >> 6) << 3);
 }
 
-uint64_t pagesize(void) {
-    static uint64_t pagesize = sysconf(_SC_PAGE_SIZE);
-    return pagesize;
+static bool is_page_size_emulated() {
+#if defined (__x86_64__)
+    return getpagesize() != 4096;
+#else
+    return false;
+#endif
 }
 
 bool PageAcct::InitPageAcct(bool pageidle_enable) {
+    if (is_page_size_emulated()) {
+        return true;
+    }
+
     if (pageidle_enable && !PageAcct::KernelHasPageIdle()) {
         LOG(ERROR) << "Idle page tracking is not supported by the kernel";
         return false;
@@ -77,6 +84,11 @@ bool PageAcct::InitPageAcct(bool pageidle_enable) {
 bool PageAcct::PageFlags(uint64_t pfn, uint64_t* flags) {
     if (!flags) return false;
 
+    if (is_page_size_emulated()) {
+        *flags = 0;
+        return true;
+    }
+
     if (kpageflags_fd_ < 0) {
         if (!InitPageAcct()) return false;
     }
@@ -92,6 +104,11 @@ bool PageAcct::PageFlags(uint64_t pfn, uint64_t* flags) {
 bool PageAcct::PageMapCount(uint64_t pfn, uint64_t* mapcount) {
     if (!mapcount) return false;
 
+    if (is_page_size_emulated()) {
+        *mapcount = 1;
+        return true;
+    }
+
     if (kpagecount_fd_ < 0) {
         if (!InitPageAcct()) return false;
     }
@@ -105,6 +122,10 @@ bool PageAcct::PageMapCount(uint64_t pfn, uint64_t* mapcount) {
 }
 
 int PageAcct::IsPageIdle(uint64_t pfn) {
+    if (is_page_size_emulated()) {
+        return 0;
+    }
+
     if (pageidle_fd_ < 0) {
         if (!InitPageAcct(true)) return -EOPNOTSUPP;
     }

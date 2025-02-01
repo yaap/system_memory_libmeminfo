@@ -33,18 +33,12 @@
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <android-base/unique_fd.h>
-#include <meminfo/kernel_page_size.h>
 #include <procinfo/process_map.h>
 
 #include "meminfo_private.h"
 
 namespace android {
 namespace meminfo {
-
-// Use the kernel page size (PTE size) for reading pagemap,
-// since android also allows emulating 16KB page size on
-// x86_64 (4KB page size hardware).
-static const size_t kKernelPageSize = kernel_page_size();
 
 // List of VMA names that we don't want to process:
 //   - On ARM32, [vectors] is a special VMA that is outside of pagemap range.
@@ -378,11 +372,11 @@ bool ProcMemInfo::PageMap(const Vma& vma, std::vector<uint64_t>* pagemap) {
         return false;
     }
 
-    uint64_t nr_pages = (vma.end - vma.start) / kKernelPageSize;
+    uint64_t nr_pages = (vma.end - vma.start) / getpagesize();
     pagemap->resize(nr_pages);
 
     size_t bytes_to_read = sizeof(uint64_t) * nr_pages;
-    off64_t start_addr = (vma.start / kKernelPageSize) * sizeof(uint64_t);
+    off64_t start_addr = (vma.start / getpagesize()) * sizeof(uint64_t);
     ssize_t bytes_read = pread64(pagemap_fd, pagemap->data(), bytes_to_read, start_addr);
     if (bytes_read == -1) {
         PLOG(ERROR) << "Failed to read page frames from page map for pid: " << pid_;
@@ -477,9 +471,9 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
         return false;
     }
 
-    uint64_t pagesz_kb = kKernelPageSize / 1024;
-    size_t num_pages = (vma.end - vma.start) / kKernelPageSize;
-    size_t first_page = vma.start / kKernelPageSize;
+    uint64_t pagesz_kb = getpagesize() / 1024;
+    size_t num_pages = (vma.end - vma.start) / getpagesize();
+    size_t first_page = vma.start / getpagesize();
 
     std::vector<uint64_t> page_cache;
     size_t cur_page_cache_index = 0;
