@@ -51,7 +51,7 @@ static const std::string bpfRbsPaths[MemEventClient::NR_CLIENTS] = {
 static const std::string testBpfSkfilterProgPaths[NR_MEM_EVENTS] = {
         MEM_EVENTS_TEST_OOM_KILL_TP, MEM_EVENTS_TEST_DIRECT_RECLAIM_START_TP,
         MEM_EVENTS_TEST_DIRECT_RECLAIM_END_TP, MEM_EVENTS_TEST_KSWAPD_WAKE_TP,
-        MEM_EVENTS_TEST_KSWAPD_SLEEP_TP};
+        MEM_EVENTS_TEST_KSWAPD_SLEEP_TP, MEM_EVENTS_TEST_LMKD_TRIGGER_VENDOR_LMK_KILL_TP};
 static const std::filesystem::path sysrq_trigger_path = "proc/sysrq-trigger";
 
 static void initializeTestListener(std::unique_ptr<MemEventListener>& memevent_listener,
@@ -393,6 +393,11 @@ class MemEventsListenerBpf : public ::testing::Test {
                 android::bpf::runProgram(mProgram, &kswapd_sleep_fake_args,
                                          sizeof(kswapd_sleep_fake_args));
                 break;
+            case MEM_EVENT_VENDOR_LMK_KILL:
+                struct vendor_lmk_kill_args vendor_lmk_kill_args;
+                android::bpf::runProgram(mProgram, &vendor_lmk_kill_args,
+                                         sizeof(vendor_lmk_kill_args));
+                break;
             default:
                 FAIL() << "Invalid event type provided";
         }
@@ -495,6 +500,14 @@ class MemEventsListenerBpf : public ::testing::Test {
                           mocked_kswapd_sleep_event.event_data.kswapd_sleep.node_id)
                         << "MEM_EVENT_KSWAPD_SLEEP: Didn't receive expected node id";
                 break;
+            case MEM_EVENT_VENDOR_LMK_KILL:
+                ASSERT_EQ(mem_event.event_data.vendor_kill.reason,
+                          mocked_vendor_lmk_kill_event.event_data.vendor_kill.reason)
+                        << "MEM_EVENT_VENDOR_LMK_KILL: Didn't receive expected reason";
+                ASSERT_EQ(mem_event.event_data.vendor_kill.min_oom_score_adj,
+                          mocked_vendor_lmk_kill_event.event_data.vendor_kill.min_oom_score_adj)
+                        << "MEM_EVENT_VENDOR_LMK_KILL: Didn't receive expected min_oom_score_adj";
+                break;
         }
     }
 };
@@ -573,6 +586,19 @@ TEST_F(MemEventsListenerBpf, listener_bpf_kswapd_sleep) {
     ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
     ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
     ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a kswapd sleep event";
+    validateMockedEvent(mem_events[0]);
+}
+
+TEST_F(MemEventsListenerBpf, listener_bpf_vendor_lmk_kill) {
+    const mem_event_type_t event_type = MEM_EVENT_VENDOR_LMK_KILL;
+
+    ASSERT_TRUE(memevent_listener->registerEvent(event_type));
+    testListenEvent(event_type);
+
+    std::vector<mem_event_t> mem_events;
+    ASSERT_TRUE(memevent_listener->getMemEvents(mem_events)) << "Failed fetching events";
+    ASSERT_FALSE(mem_events.empty()) << "Expected for mem_events to have at least 1 mocked event";
+    ASSERT_EQ(mem_events[0].type, event_type) << "Didn't receive a vendor lmk kill event";
     validateMockedEvent(mem_events[0]);
 }
 

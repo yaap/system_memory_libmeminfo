@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include <linux/bpf_perf_event.h>
+#include <linux/oom.h>
 
 #include <memevents/bpf_helpers.h>
 #include <memevents/bpf_types.h>
@@ -108,5 +109,30 @@ DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_kswapd_sleep/lmkd", AID_ROOT, 
     return 0;
 }
 
+DEFINE_BPF_PROG_KVER("tracepoint/android_vendor_lmk/android_trigger_vendor_lmk_kill/lmkd",
+                     AID_ROOT, AID_SYSTEM, tp_lmkd_vendor_lmk_kill, KVER_6_1)
+(struct vendor_lmk_kill_args* args) {
+    struct mem_event_t* data;
+    uint32_t reason = args->reason;
+    short min_oom_score_adj = args->min_oom_score_adj;
+
+    if (min_oom_score_adj < OOM_SCORE_ADJ_MIN ||
+        min_oom_score_adj > OOM_SCORE_ADJ_MAX)
+        return 0;
+
+    if (reason < 0 || reason >= NUM_VENDOR_LMK_KILL_REASON)
+        return 0;
+
+    data = bpf_lmkd_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_VENDOR_LMK_KILL;
+    data->event_data.vendor_kill.reason = reason;
+    data->event_data.vendor_kill.min_oom_score_adj = min_oom_score_adj;
+
+    bpf_lmkd_rb_submit(data);
+
+    return 0;
+}
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");

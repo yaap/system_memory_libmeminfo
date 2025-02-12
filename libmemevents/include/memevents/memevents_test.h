@@ -31,6 +31,8 @@
     "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_kswapd_wake"
 #define MEM_EVENTS_TEST_KSWAPD_SLEEP_TP \
     "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_kswapd_sleep"
+#define MEM_EVENTS_TEST_LMKD_TRIGGER_VENDOR_LMK_KILL_TP \
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_android_trigger_vendor_lmk_kill"
 
 // clang-format off
 const struct mem_event_t mocked_oom_event = {
@@ -60,6 +62,13 @@ const struct mem_event_t mocked_kswapd_sleep_event = {
      .type = MEM_EVENT_KSWAPD_SLEEP,
      .event_data.kswapd_sleep = {
         .node_id = 3,
+}};
+
+const struct mem_event_t mocked_vendor_lmk_kill_event = {
+     .type = MEM_EVENT_VENDOR_LMK_KILL,
+     .event_data.vendor_kill = {
+        .reason = 3,
+        .min_oom_score_adj = 900,
 }};
 // clang-format on
 

@@ -123,6 +123,12 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
             .tpEvent = "mm_vmscan_kswapd_sleep",
             .event_type = MEM_EVENT_KSWAPD_SLEEP
         },
+        {
+            .prog = MEM_EVENTS_LMKD_TRIGGER_VENDOR_LMK_KILL_TP,
+            .tpGroup = "android_vendor_lmk",
+            .tpEvent = "android_trigger_vendor_lmk_kill",
+            .event_type = MEM_EVENT_VENDOR_LMK_KILL
+        },
     },
     // MemEventsTest
     {

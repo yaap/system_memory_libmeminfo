@@ -51,6 +51,11 @@ cc_library {
     srcs: ["memevents.cpp"],
 }
 
+cc_library_headers {
+    name: "libmemevents_headers",
+    export_include_dirs: ["include"],
+}
+
 cc_test {
     name: "memevents_test",
     srcs: [

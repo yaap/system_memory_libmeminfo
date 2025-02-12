@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include <linux/bpf_perf_event.h>
+#include <linux/oom.h>
 
 #include <memevents/bpf_helpers.h>
 #include <memevents/bpf_types.h>
@@ -138,5 +139,29 @@ DEFINE_BPF_PROG_KVER("skfilter/kswapd_sleep", AID_ROOT, AID_ROOT, tp_memevents_t
     return 0;
 }
 
+DEFINE_BPF_PROG_KVER("skfilter/android_trigger_vendor_lmk_kill", AID_ROOT, AID_SYSTEM,
+                     tp_memevents_test_lmkd_vendor_lmk_kill, KVER_6_1)
+(void* __unused ctx) {
+    struct mem_event_t* data;
+    uint32_t reason = mocked_vendor_lmk_kill_event.event_data.vendor_kill.reason;
+    short min_oom_score_adj = mocked_vendor_lmk_kill_event.event_data.vendor_kill.min_oom_score_adj;
+
+    if (min_oom_score_adj < OOM_SCORE_ADJ_MIN || min_oom_score_adj > OOM_SCORE_ADJ_MAX)
+        return 0;
+
+    if (reason < 0 || reason >= NUM_VENDOR_LMK_KILL_REASON)
+        return 0;
+
+    data = bpf_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_VENDOR_LMK_KILL;
+    data->event_data.vendor_kill.reason = reason;
+    data->event_data.vendor_kill.min_oom_score_adj = min_oom_score_adj;
+
+    bpf_rb_submit(data);
+
+    return 0;
+}
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");
