@@ -219,7 +219,6 @@ const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect
     auto collect_vmas = [&](Vma& vma) {
         if (std::find(g_excluded_vmas.begin(), g_excluded_vmas.end(), vma.name) ==
                 g_excluded_vmas.end()) {
-            maps_.emplace_back(vma);
             if (collect_usage) {
                 add_mem_usage(&usage_, vma.usage);
             }
@@ -229,6 +228,7 @@ const std::vector<Vma>& ProcMemInfo::Smaps(const std::string& path, bool collect
                            << "-" << vma.end << "]";
                 return false;
             }
+            maps_.emplace_back(vma);
         }
         return true;
     };
