@@ -33,6 +33,8 @@
     "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_kswapd_sleep"
 #define MEM_EVENTS_TEST_LMKD_TRIGGER_VENDOR_LMK_KILL_TP \
     "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_android_trigger_vendor_lmk_kill"
+#define MEM_EVENTS_TEST_CALCULATE_TOTALRESERVE_PAGES_TP \
+    "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_skfilter_calculate_totalreserve_pages"
 
 // clang-format off
 const struct mem_event_t mocked_oom_event = {
@@ -69,6 +71,12 @@ const struct mem_event_t mocked_vendor_lmk_kill_event = {
      .event_data.vendor_kill = {
         .reason = 3,
         .min_oom_score_adj = 900,
+}};
+
+const struct mem_event_t mocked_total_reserve_pages_event = {
+     .type = MEM_EVENT_UPDATE_ZONEINFO,
+     .event_data.reserve_pages = {
+        .num_pages = 1234,
 }};
 // clang-format on
 
