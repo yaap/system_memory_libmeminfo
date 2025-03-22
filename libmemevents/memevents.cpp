@@ -129,6 +129,12 @@ static const std::vector<std::vector<struct MemBpfAttachment>> attachments = {
             .tpEvent = "android_trigger_vendor_lmk_kill",
             .event_type = MEM_EVENT_VENDOR_LMK_KILL
         },
+        {
+            .prog = MEM_EVENTS_LMKD_CALCULATE_TOTALRESERVE_PAGES_TP,
+            .tpGroup = "kmem",
+            .tpEvent = "mm_calculate_totalreserve_pages",
+            .event_type = MEM_EVENT_UPDATE_ZONEINFO
+        },
     },
     // MemEventsTest
     {

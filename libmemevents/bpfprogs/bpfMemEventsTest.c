@@ -163,5 +163,20 @@ DEFINE_BPF_PROG_KVER("skfilter/android_trigger_vendor_lmk_kill", AID_ROOT, AID_S
 
     return 0;
 }
+
+DEFINE_BPF_PROG_KVER("skfilter/calculate_totalreserve_pages", AID_ROOT, AID_ROOT,
+                     tp_memevents_test_calculate_totalreserve_pages, KVER_6_1)
+(void* __unused ctx) {
+    struct mem_event_t* data = bpf_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_UPDATE_ZONEINFO;
+    data->event_data.reserve_pages.num_pages =
+            mocked_total_reserve_pages_event.event_data.reserve_pages.num_pages;
+
+    bpf_rb_submit(data);
+
+    return 0;
+}
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");
