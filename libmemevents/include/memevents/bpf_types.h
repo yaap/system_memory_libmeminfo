@@ -31,9 +31,10 @@ typedef unsigned int mem_event_type_t;
 #define MEM_EVENT_KSWAPD_WAKE 3
 #define MEM_EVENT_KSWAPD_SLEEP 4
 #define MEM_EVENT_VENDOR_LMK_KILL 5
+#define MEM_EVENT_UPDATE_ZONEINFO 6
 
 // This always comes after the last valid event type
-#define NR_MEM_EVENTS 6
+#define NR_MEM_EVENTS 7
 
 /* BPF-Rb Paths */
 #define MEM_EVENTS_AMS_RB "/sys/fs/bpf/memevents/map_bpfMemEvents_ams_rb"
@@ -55,6 +56,8 @@ typedef unsigned int mem_event_type_t;
 #define MEM_EVENTS_LMKD_TRIGGER_VENDOR_LMK_KILL_TP \
     "/sys/fs/bpf/memevents/"                       \
     "prog_bpfMemEvents_tracepoint_android_vendor_lmk_android_trigger_vendor_lmk_kill_lmkd"
+#define MEM_EVENTS_LMKD_CALCULATE_TOTALRESERVE_PAGES_TP \
+    "/sys/fs/bpf/memevents/prog_bpfMemEvents_tracepoint_kmem_mm_calculate_totalreserve_pages_lmkd"
 #define MEM_EVENTS_TEST_OOM_MARK_VICTIM_TP \
     "/sys/fs/bpf/memevents/prog_bpfMemEventsTest_tracepoint_oom_mark_victim"
 
@@ -99,6 +102,10 @@ struct mem_event_t {
             uint32_t reason;
             short min_oom_score_adj;
         } vendor_kill;
+
+        struct TotalReservePages {
+            uint32_t num_pages;
+        } reserve_pages;
     } event_data;
 };
 
@@ -145,5 +152,11 @@ struct vendor_lmk_kill_args {
     /* Actual fields start at offset 8 */
     uint32_t reason;
     short min_oom_score_adj;
+};
+
+struct calculate_totalreserve_pages_args {
+    uint64_t __ignore;
+    /* Actual fields start at offset 8 */
+    uint64_t totalreserve_pages;
 };
 #endif /* MEM_EVENTS_BPF_TYES_H_ */

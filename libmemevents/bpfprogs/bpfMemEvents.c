@@ -134,5 +134,18 @@ DEFINE_BPF_PROG_KVER("tracepoint/android_vendor_lmk/android_trigger_vendor_lmk_k
 
     return 0;
 }
+
+DEFINE_BPF_PROG_KVER("tracepoint/kmem/mm_calculate_totalreserve_pages/lmkd", AID_ROOT, AID_SYSTEM,
+                     tp_lmkd_calculate_totalreserve_pages, KVER_6_1)
+(struct calculate_totalreserve_pages_args* __unused args) {
+    struct mem_event_t* data = bpf_lmkd_rb_reserve();
+    if (data == NULL) return 1;
+
+    data->type = MEM_EVENT_UPDATE_ZONEINFO;
+
+    bpf_lmkd_rb_submit(data);
+
+    return 0;
+}
 // bpf_probe_read_str is GPL only symbol
 LICENSE("GPL");
