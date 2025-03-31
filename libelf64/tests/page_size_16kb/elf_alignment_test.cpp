@@ -79,9 +79,10 @@ class ElfAlignmentTest :public ::testing::TestWithParam<std::string> {
         // Ignore VNDK APEXes. They are prebuilts from old branches, and would
         // only be used on devices with old vendor images.
         escapeForRegex("/apex/com.android.vndk.v"),
-        // Ignore Trusty VM images as they don't run in userspace, so 16K is not
-        // required. See b/365240530 for more context.
-        escapeForRegex("/system_ext/etc/vm/trusty_vm"),
+        // Ignore Trusty VM images under */etc/vm/trusty_vm as they don't run
+        // in userspace, so 16K is not required. See b/365240530 and b/406626518
+        // for more context.
+        ".*" + escapeForRegex("/etc/vm/trusty_vm"),
         // Ignore non-Android firmware images.
         escapeForRegex("/odm/firmware/"),
         escapeForRegex("/vendor/firmware/"),
