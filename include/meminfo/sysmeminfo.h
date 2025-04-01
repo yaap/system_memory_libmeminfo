@@ -59,6 +59,7 @@ class SysMemInfo final {
     static constexpr const char kMemInactiveFile[] = "Inactive(file):";
     static constexpr const char kMemCmaTotal[] = "CmaTotal:";
     static constexpr const char kMemCmaFree[] = "CmaFree:";
+    static constexpr const char kMemSwapCached[] = "SwapCached:";
 
     static constexpr std::initializer_list<std::string_view> kDefaultSysMemInfoTags = {
             SysMemInfo::kMemTotal,      SysMemInfo::kMemFree,         SysMemInfo::kMemBuffers,
@@ -69,7 +70,7 @@ class SysMemInfo final {
             SysMemInfo::kMemActive,     SysMemInfo::kMemInactive,     SysMemInfo::kMemUnevictable,
             SysMemInfo::kMemAvailable,  SysMemInfo::kMemActiveAnon,   SysMemInfo::kMemInactiveAnon,
             SysMemInfo::kMemActiveFile, SysMemInfo::kMemInactiveFile, SysMemInfo::kMemCmaTotal,
-            SysMemInfo::kMemCmaFree,
+            SysMemInfo::kMemCmaFree,    SysMemInfo::kMemSwapCached,
     };
 
     SysMemInfo() = default;
@@ -112,6 +113,7 @@ class SysMemInfo final {
     uint64_t mem_inactive_file_kb() const { return find_mem_by_tag(kMemInactiveFile); }
     uint64_t mem_cma_total_kb() const { return find_mem_by_tag(kMemCmaTotal); }
     uint64_t mem_cma_free_kb() const { return find_mem_by_tag(kMemCmaFree); }
+    uint64_t mem_swap_cached_kb() { return find_mem_by_tag(kMemSwapCached); }
     uint64_t mem_zram_kb(const char* zram_dev = nullptr) const;
     uint64_t mem_compacted_kb(const char* zram_dev = nullptr);
 
