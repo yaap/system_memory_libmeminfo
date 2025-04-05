@@ -912,7 +912,7 @@ MemFree:         1809728 kB
 MemAvailable:    2546560 kB
 Buffers:           54736 kB
 Cached:           776052 kB
-SwapCached:            0 kB
+SwapCached:        29252 kB
 Active:           445856 kB
 Inactive:         459092 kB
 Active(anon):      78492 kB
@@ -984,6 +984,7 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mi.mem_inactive_file_kb(), 456852);
     EXPECT_EQ(mi.mem_cma_total_kb(), 131072);
     EXPECT_EQ(mi.mem_cma_free_kb(), 130380);
+    EXPECT_EQ(mi.mem_swap_cached_kb(), 29252);
 }
 
 TEST(SysMemInfo, TestEmptyFile) {
@@ -1035,6 +1036,7 @@ enum {
     MEMINFO_INACTIVE_FILE,
     MEMINFO_CMA_TOTAL,
     MEMINFO_CMA_FREE,
+    MEMINFO_SWAP_CACHED,
     MEMINFO_COUNT
 };
 
@@ -1044,7 +1046,7 @@ MemFree:         1809728 kB
 MemAvailable:    2546560 kB
 Buffers:           54736 kB
 Cached:           776052 kB
-SwapCached:            0 kB
+SwapCached:        29252 kB
 Active:           445856 kB
 Inactive:         459092 kB
 Active(anon):      78492 kB
@@ -1124,6 +1126,7 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mem[MEMINFO_INACTIVE_FILE], 456852);
     EXPECT_EQ(mem[MEMINFO_CMA_TOTAL], 131072);
     EXPECT_EQ(mem[MEMINFO_CMA_FREE], 130380);
+    EXPECT_EQ(mem[MEMINFO_SWAP_CACHED], 29252);
 }
 
 TEST(SysMemInfo, TestVmallocInfoNoMemory) {
