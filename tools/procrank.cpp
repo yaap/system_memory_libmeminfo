@@ -44,6 +44,11 @@ using ::android::smapinfo::SortOrder;
               << "    -u  Sort by USS." << std::endl
               << "    -s  Sort by swap." << std::endl
               << "        (Default sort order is PSS.)" << std::endl
+              << "        Note:" << std::endl
+              << "        - Swap is the total amount of uncompressed swap memory." << std::endl
+              << "        - PSwap is uncompressed PSS in swap memory" << std::endl
+              << "        - USwap is uncompressed exclusive memory in swap" << std::endl
+              << "        - ZSwap is the actual memory cost of swap in ZRAM." << std::endl
               << "    -R  Reverse sort order (default is descending)." << std::endl
               << "    -c  Only show cached (storage backed) pages" << std::endl
               << "    -C  Only show non-cached (ram/swap backed) pages" << std::endl
