@@ -28,8 +28,8 @@ DEFINE_BPF_RINGBUF(ams_rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_
 DEFINE_BPF_RINGBUF(lmkd_rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID,
                    AID_SYSTEM, 0660)
 
-DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM, tp_ams, KVER_5_10)
-(struct mark_victim_args* args) {
+DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM,
+                     tracepoint_oom_mark_victim_ams, KVER_5_10)(struct mark_victim_args* args) {
     unsigned long long timestamp_ns = bpf_ktime_get_ns();
     struct mem_event_t* data = bpf_ams_rb_reserve();
     if (data == NULL) return 1;
@@ -54,7 +54,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim/ams", AID_ROOT, AID_SYSTEM, tp_
 }
 
 DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_direct_reclaim_begin/lmkd", AID_ROOT, AID_SYSTEM,
-                     tp_lmkd_dr_start, KVER_5_10)
+                     tracepoint_vmscan_mm_vmscan_direct_reclaim_begin_lmkd, KVER_5_10)
 (struct direct_reclaim_begin_args* __unused args) {
     struct mem_event_t* data = bpf_lmkd_rb_reserve();
     if (data == NULL) return 1;
@@ -67,7 +67,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_direct_reclaim_begin/lmkd", AI
 }
 
 DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_direct_reclaim_end/lmkd", AID_ROOT, AID_SYSTEM,
-                     tp_lmkd_dr_end, KVER_5_10)
+                     tracepoint_vmscan_mm_vmscan_direct_reclaim_end_lmkd, KVER_5_10)
 (struct direct_reclaim_end_args* __unused args) {
     struct mem_event_t* data = bpf_lmkd_rb_reserve();
     if (data == NULL) return 1;
@@ -80,7 +80,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_direct_reclaim_end/lmkd", AID_
 }
 
 DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_kswapd_wake/lmkd", AID_ROOT, AID_SYSTEM,
-                     tp_lmkd_kswapd_wake, KVER_5_10)
+                     tracepoint_vmscan_mm_vmscan_kswapd_wake_lmkd, KVER_5_10)
 (struct kswapd_wake_args* args) {
     struct mem_event_t* data = bpf_lmkd_rb_reserve();
     if (data == NULL) return 1;
@@ -96,7 +96,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_kswapd_wake/lmkd", AID_ROOT, A
 }
 
 DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_kswapd_sleep/lmkd", AID_ROOT, AID_SYSTEM,
-                     tp_lmkd_kswapd_sleep, KVER_5_10)
+                     tracepoint_vmscan_mm_vmscan_kswapd_sleep_lmkd, KVER_5_10)
 (struct kswapd_sleep_args* args) {
     struct mem_event_t* data = bpf_lmkd_rb_reserve();
     if (data == NULL) return 1;
@@ -109,8 +109,9 @@ DEFINE_BPF_PROG_KVER("tracepoint/vmscan/mm_vmscan_kswapd_sleep/lmkd", AID_ROOT, 
     return 0;
 }
 
-DEFINE_BPF_PROG_KVER("tracepoint/android_vendor_lmk/android_trigger_vendor_lmk_kill/lmkd",
-                     AID_ROOT, AID_SYSTEM, tp_lmkd_vendor_lmk_kill, KVER_6_1)
+DEFINE_BPF_PROG_KVER("tracepoint/android_vendor_lmk/android_trigger_vendor_lmk_kill/lmkd", AID_ROOT,
+                     AID_SYSTEM, tracepoint_android_vendor_lmk_android_trigger_vendor_lmk_kill_lmkd,
+                     KVER_6_1)
 (struct vendor_lmk_kill_args* args) {
     struct mem_event_t* data;
     uint32_t reason = args->reason;
@@ -136,7 +137,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/android_vendor_lmk/android_trigger_vendor_lmk_k
 }
 
 DEFINE_BPF_PROG_KVER("tracepoint/kmem/mm_calculate_totalreserve_pages/lmkd", AID_ROOT, AID_SYSTEM,
-                     tp_lmkd_calculate_totalreserve_pages, KVER_6_1)
+                     tracepoint_kmem_mm_calculate_totalreserve_pages_lmkd, KVER_6_1)
 (struct calculate_totalreserve_pages_args* __unused args) {
     struct mem_event_t* data = bpf_lmkd_rb_reserve();
     if (data == NULL) return 1;

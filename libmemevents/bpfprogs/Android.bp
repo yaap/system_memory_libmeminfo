@@ -15,6 +15,7 @@ bpf {
     name: "bpfMemEvents.o",
     srcs: ["bpfMemEvents.c"],
     include_dirs: [
+        "system/bpf/include/defs",
         "system/memory/libmeminfo/libmemevents/include",
     ],
     sub_dir: "memevents",
@@ -24,7 +25,28 @@ bpf {
     name: "bpfMemEventsTest.o",
     srcs: ["bpfMemEventsTest.c"],
     include_dirs: [
+        "system/bpf/include/defs",
         "system/memory/libmeminfo/libmemevents/include",
     ],
     sub_dir: "memevents",
+}
+
+libbpf_prog {
+    name: "bpfMemEvents.bpf",
+    srcs: ["bpfMemEvents.c"],
+    header_libs: [
+        "android_bpf_defs",
+        "libmemevents_headers",
+    ],
+    relative_install_path: "memevents",
+}
+
+libbpf_prog {
+    name: "bpfMemEventsTest.bpf",
+    srcs: ["bpfMemEventsTest.c"],
+    header_libs: [
+        "android_bpf_defs",
+        "libmemevents_headers",
+    ],
+    relative_install_path: "memevents",
 }

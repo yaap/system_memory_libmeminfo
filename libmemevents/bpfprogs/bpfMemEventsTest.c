@@ -26,7 +26,8 @@
 DEFINE_BPF_RINGBUF(rb, struct mem_event_t, MEM_EVENTS_RINGBUF_SIZE, DEFAULT_BPF_MAP_UID, AID_SYSTEM,
                    0660)
 
-DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim", AID_ROOT, AID_SYSTEM, tp_ams, KVER_5_10)
+DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim", AID_ROOT, AID_SYSTEM, tracepoint_oom_mark_victim,
+                     KVER_5_10)
 (struct mark_victim_args* args) {
     unsigned long long timestamp_ns = bpf_ktime_get_ns();
     struct mem_event_t* data = bpf_rb_reserve();
@@ -57,7 +58,7 @@ DEFINE_BPF_PROG_KVER("tracepoint/oom/mark_victim", AID_ROOT, AID_SYSTEM, tp_ams,
  * executed manually with BPF_PROG_RUN, and the tracepoint bpf-progs do not
  * currently implement this BPF_PROG_RUN operation.
  */
-DEFINE_BPF_PROG_KVER("skfilter/oom_kill", AID_ROOT, AID_ROOT, tp_memevents_test_oom, KVER_5_10)
+DEFINE_BPF_PROG_KVER("skfilter/oom_kill", AID_ROOT, AID_ROOT, skfilter_oom_kill, KVER_5_10)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
     if (data == NULL) return 1;
@@ -82,7 +83,7 @@ DEFINE_BPF_PROG_KVER("skfilter/oom_kill", AID_ROOT, AID_ROOT, tp_memevents_test_
 }
 
 DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_begin", AID_ROOT, AID_ROOT,
-                     tp_memevents_test_dr_begin, KVER_5_10)
+                     skfilter_direct_reclaim_begin, KVER_5_10)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
     if (data == NULL) return 1;
@@ -94,7 +95,7 @@ DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_begin", AID_ROOT, AID_ROOT,
     return 0;
 }
 
-DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_end", AID_ROOT, AID_ROOT, tp_memevents_test_dr_end,
+DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_end", AID_ROOT, AID_ROOT, skfilter_direct_reclaim_end,
                      KVER_5_10)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
@@ -107,8 +108,7 @@ DEFINE_BPF_PROG_KVER("skfilter/direct_reclaim_end", AID_ROOT, AID_ROOT, tp_memev
     return 0;
 }
 
-DEFINE_BPF_PROG_KVER("skfilter/kswapd_wake", AID_ROOT, AID_ROOT, tp_memevents_test_kswapd_wake,
-                     KVER_5_10)
+DEFINE_BPF_PROG_KVER("skfilter/kswapd_wake", AID_ROOT, AID_ROOT, skfilter_kswapd_wake, KVER_5_10)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
     if (data == NULL) return 1;
@@ -124,8 +124,7 @@ DEFINE_BPF_PROG_KVER("skfilter/kswapd_wake", AID_ROOT, AID_ROOT, tp_memevents_te
     return 0;
 }
 
-DEFINE_BPF_PROG_KVER("skfilter/kswapd_sleep", AID_ROOT, AID_ROOT, tp_memevents_test_kswapd_sleep,
-                     KVER_5_10)
+DEFINE_BPF_PROG_KVER("skfilter/kswapd_sleep", AID_ROOT, AID_ROOT, skfilter_kswapd_sleep, KVER_5_10)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
     if (data == NULL) return 1;
@@ -140,7 +139,7 @@ DEFINE_BPF_PROG_KVER("skfilter/kswapd_sleep", AID_ROOT, AID_ROOT, tp_memevents_t
 }
 
 DEFINE_BPF_PROG_KVER("skfilter/android_trigger_vendor_lmk_kill", AID_ROOT, AID_SYSTEM,
-                     tp_memevents_test_lmkd_vendor_lmk_kill, KVER_6_1)
+                     skfilter_android_trigger_vendor_lmk_kill, KVER_6_1)
 (void* __unused ctx) {
     struct mem_event_t* data;
     uint32_t reason = mocked_vendor_lmk_kill_event.event_data.vendor_kill.reason;
@@ -165,7 +164,7 @@ DEFINE_BPF_PROG_KVER("skfilter/android_trigger_vendor_lmk_kill", AID_ROOT, AID_S
 }
 
 DEFINE_BPF_PROG_KVER("skfilter/calculate_totalreserve_pages", AID_ROOT, AID_ROOT,
-                     tp_memevents_test_calculate_totalreserve_pages, KVER_6_1)
+                     skfilter_calculate_totalreserve_pages, KVER_6_1)
 (void* __unused ctx) {
     struct mem_event_t* data = bpf_rb_reserve();
     if (data == NULL) return 1;
