@@ -39,12 +39,12 @@ cc_library {
     ],
 
     required: [
-        "bpfMemEvents.o",
+        "bpfMemEvents.bpf",
     ],
 
     product_variables: {
         debuggable: {
-            required: ["bpfMemEventsTest.o"],
+            required: ["bpfMemEventsTest.bpf"],
         },
     },
 
