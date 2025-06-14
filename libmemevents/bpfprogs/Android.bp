@@ -11,26 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-bpf {
-    name: "bpfMemEvents.o",
-    srcs: ["bpfMemEvents.c"],
-    include_dirs: [
-        "system/bpf/include/defs",
-        "system/memory/libmeminfo/libmemevents/include",
-    ],
-    sub_dir: "memevents",
-}
-
-bpf {
-    name: "bpfMemEventsTest.o",
-    srcs: ["bpfMemEventsTest.c"],
-    include_dirs: [
-        "system/bpf/include/defs",
-        "system/memory/libmeminfo/libmemevents/include",
-    ],
-    sub_dir: "memevents",
-}
-
 libbpf_prog {
     name: "bpfMemEvents.bpf",
     srcs: ["bpfMemEvents.c"],
