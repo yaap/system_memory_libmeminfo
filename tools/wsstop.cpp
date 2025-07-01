@@ -36,12 +36,14 @@ using ::android::meminfo::Vma;
 static int32_t g_delay = 0;
 static int32_t g_total = 2;
 static pid_t g_pid = -1;
+static bool g_private;
 
 [[noreturn]] static void usage(int exit_status) {
     fprintf(stderr,
             "%s [-d DELAY_BETWEEN_EACH_SAMPLE] [-n REFRESH_TOTAL] PID\n"
             "-d\tdelay between each working set sample (default 0)\n"
-            "-n\ttotal number of refreshes before we exit (default 2)\n",
+            "-n\ttotal number of refreshes before we exit (default 2)\n"
+            "-p\tonly show mappings with non-zero private pages\n",
             getprogname());
 
     exit(exit_status);
@@ -150,10 +152,13 @@ static int workingset() {
         std::unique_ptr<ProcMemInfo> proc_mem = std::make_unique<ProcMemInfo>(g_pid, true);
         std::vector<Vma> wss = proc_mem->MapsWithPageIdle();
 
+        auto filter_fn = [](const Vma& v) {
+            return v.usage.rss == 0 ||
+                   (g_private && v.usage.private_clean == 0 && v.usage.private_dirty == 0);
+        };
+
         diff_workingset(wss, last_wss, &diff_wss);
-        diff_wss.erase(std::remove_if(diff_wss.begin(), diff_wss.end(),
-                                      [](const auto& v) { return v.usage.rss == 0; }),
-                       diff_wss.end());
+        diff_wss.erase(std::remove_if(diff_wss.begin(), diff_wss.end(), filter_fn), diff_wss.end());
         if ((nr_refresh % 5) == 0) {
             print_header();
             print_divider();
@@ -183,13 +188,16 @@ int main(int argc, char* argv[]) {
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "d:n:h", longopts, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "d:n:ph", longopts, nullptr)) != -1) {
         switch (opt) {
             case 'd':
                 g_delay = atoi(optarg);
                 break;
             case 'n':
                 g_total = atoi(optarg);
+                break;
+            case 'p':
+                g_private = true;
                 break;
             case 'h':
                 usage(EXIT_SUCCESS);

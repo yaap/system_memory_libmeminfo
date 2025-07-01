@@ -130,10 +130,9 @@ int PageAcct::IsPageIdle(uint64_t pfn) {
         if (!InitPageAcct(true)) return -EOPNOTSUPP;
     }
 
-    int idle_status = MarkPageIdle(pfn);
-    if (idle_status) return idle_status;
-
-    return GetPageIdle(pfn);
+    int idle_status = GetPageIdle(pfn);
+    MarkPageIdle(pfn);
+    return idle_status;
 }
 
 int PageAcct::MarkPageIdle(uint64_t pfn) const {

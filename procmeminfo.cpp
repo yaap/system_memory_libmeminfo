@@ -551,7 +551,7 @@ bool ProcMemInfo::ReadVmaStats(int pagemap_fd, Vma& vma, bool get_wss, bool use_
         bool is_private = (cur_page_counts == 1);
         // Working set
         if (get_wss) {
-            bool is_referenced = use_pageidle ? (pinfo.IsPageIdle(page_frame) == 1)
+            bool is_referenced = use_pageidle ? !pinfo.IsPageIdle(page_frame)
                                               : !!(cur_page_flags & (1 << KPF_REFERENCED));
             if (!is_referenced) {
                 continue;
