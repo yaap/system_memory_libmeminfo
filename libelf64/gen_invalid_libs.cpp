@@ -56,6 +56,57 @@ void set_exec_segments_as_rwx(android::elf64::Elf64Binary& elf64Binary) {
     }
 }
 
+void set_segments_flags(android::elf64::Elf64Binary& elf64Binary, std::vector<int>& segmentFlags) {
+    int segmentIndex = 0;
+    for (int i = 0; i < elf64Binary.phdrs.size(); i++) {
+        if (elf64Binary.phdrs[i].p_type == PT_LOAD) {
+            if (segmentIndex < segmentFlags.size()) {
+                elf64Binary.phdrs[i].p_flags = segmentFlags[segmentIndex];
+                segmentIndex++;
+            }
+        }
+    }
+}
+
+void set_segments_alignment(android::elf64::Elf64Binary& elf64Binary, long alignment) {
+    for (int i = 0; i < elf64Binary.phdrs.size(); i++) {
+        if (elf64Binary.phdrs[i].p_type == PT_LOAD) {
+            elf64Binary.phdrs[i].p_align = alignment;
+        }
+    }
+}
+
+void gen_lib_with_custom_segment_and_alignment(const android::elf64::Elf64Binary& elf64Binary,
+                                               const std::string& newSharedLibName,
+                                               std::vector<int>& segmentFlags, long alignment) {
+    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    set_segments_flags(copyElf64Binary, segmentFlags);
+    set_segments_alignment(copyElf64Binary, alignment);
+    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+}
+
+void gen_lib_with_rx_rw_rx_and_custom_alignment(const android::elf64::Elf64Binary& elf64Binary,
+                                                const std::string& newSharedLibName) {
+    std::vector<int> segmentFlags;
+    segmentFlags.push_back(PF_R | PF_X);
+    segmentFlags.push_back(PF_R | PF_W);
+    segmentFlags.push_back(PF_R | PF_X);
+    const long alignment = 4096;
+    gen_lib_with_custom_segment_and_alignment(elf64Binary, newSharedLibName, segmentFlags,
+                                              alignment);
+}
+
+void gen_lib_with_rw_rx_rw_and_custom_alignment(const android::elf64::Elf64Binary& elf64Binary,
+                                                const std::string& newSharedLibName) {
+    std::vector<int> segmentFlags;
+    segmentFlags.push_back(PF_R | PF_W);
+    segmentFlags.push_back(PF_R | PF_X);
+    segmentFlags.push_back(PF_R | PF_W);
+    const long alignment = 4096;
+    gen_lib_with_custom_segment_and_alignment(elf64Binary, newSharedLibName, segmentFlags,
+                                              alignment);
+}
+
 // Generates a shared library with the executable segments as read/write/exec.
 void gen_lib_with_rwx_segment(const android::elf64::Elf64Binary& elf64Binary,
                               const std::string& newSharedLibName) {
@@ -256,6 +307,10 @@ int main(int argc, char* argv[]) {
                 elf64Binary, outputDir + "/libtest_invalid-zero_shdr_table_content.so");
         gen_lib_with_zero_shdr_table_offset(
                 elf64Binary, outputDir + "/libtest_invalid-zero_shdr_table_offset.so");
+        gen_lib_with_rw_rx_rw_and_custom_alignment(elf64Binary,
+                                                   outputDir + "/libtest_invalid-rw_rx_rw.so");
+        gen_lib_with_rx_rw_rx_and_custom_alignment(elf64Binary,
+                                                   outputDir + "/libtest_invalid-rx_rw_rx.so");
     }
 
     return 0;
