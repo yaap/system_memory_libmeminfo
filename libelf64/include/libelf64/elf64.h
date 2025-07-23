@@ -20,7 +20,8 @@
 #include <string>
 #include <vector>
 
-#include <android-base/logging.h>
+#include <assert.h>
+
 #include <elf.h>
 
 namespace android {
@@ -150,7 +151,7 @@ class Elf64Binary {
 
         char* st = sections.at(dynStrIdx).data.data();
 
-        CHECK_NE(nullptr, memchr(&st[offset], 0, sections.at(dynStrIdx).data.size() - offset));
+        assert(memchr(&st[offset], 0, sections.at(dynStrIdx).data.size() - offset));
         return &st[offset];
     }
 };

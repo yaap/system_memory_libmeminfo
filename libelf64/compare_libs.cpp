@@ -24,11 +24,10 @@
 #include <vector>
 
 #include <elf.h>
+#include <libgen.h>
 #include <stdlib.h>
 
-void usage() {
-    const std::string progname = getprogname();
-
+void usage(char* progname) {
     std::cout << "Usage: " << progname << " [shared_lib_1] [shared_lib_2]\n"
               << R"(
 Options:
@@ -40,7 +39,7 @@ shared_lib_2    elf64 shared library to compare with shared_lib_1
 // Compare ELF64 binaries (shared libraries, executables).
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        usage();
+        usage(basename(argv[0]));
         return EXIT_FAILURE;
     }
 

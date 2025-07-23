@@ -108,7 +108,7 @@ bool Elf64Parser::ParseSections() {
         char* st = sStrTblPtr.data.data();
 
         if (nameIdx < sStrTblPtr.size) {
-            CHECK_NE(nullptr, memchr(&st[nameIdx], 0, sStrTblPtr.size - nameIdx));
+            assert(memchr(&st[nameIdx], 0, sStrTblPtr.size - nameIdx));
             elfBinaryPtr->sections[i].name = &st[nameIdx];
         }
     }

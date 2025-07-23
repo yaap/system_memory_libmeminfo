@@ -24,6 +24,7 @@
 #include <vector>
 
 #include <elf.h>
+#include <libgen.h>
 #include <stdlib.h>
 
 // Remove the sharedLibs from the .dynamic section.
@@ -262,9 +263,7 @@ void gen_lib_with_zero_shdr_table_content(const android::elf64::Elf64Binary& elf
     elf64Writer.WriteSectionHeaders(copyElf64Binary.shdrs, elf64Binary.ehdr.e_shoff);
 }
 
-void usage() {
-    const std::string progname = getprogname();
-
+void usage(char* progname) {
     std::cout << "Usage: " << progname << " [shared_lib] [out_dir]...\n"
               << R"(
 Options:
@@ -281,7 +280,7 @@ out_dir          the invalid shared libraries that are
 //   - section headers
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        usage();
+        usage(basename(argv[0]));
         return EXIT_FAILURE;
     }
 
