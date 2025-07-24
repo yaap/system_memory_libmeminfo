@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <libelf64/parse.h>
+#include <elfutils/parse.h>
 
 #include <functional>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 using Elf64Callback = std::function<void(const Elf64Binary&)>;
 
@@ -31,5 +31,5 @@ using Elf64Callback = std::function<void(const Elf64Binary&)>;
  */
 int ForEachElf64FromDir(const std::string& path, const Elf64Callback& callback);
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android

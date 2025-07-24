@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
-#include <libelf64/parse.h>
+#include <elfutils/parse.h>
 
 #include <elf.h>
 
@@ -21,7 +21,7 @@
 #include <iostream>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 Elf64Parser::Elf64Parser(const std::string& fileName, Elf64Binary& elfBinary)
     : elf64stream(fileName) {
@@ -165,6 +165,5 @@ bool Elf64Parser::IsElf64(const std::string& fileName) {
     return false;
 }
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android
-

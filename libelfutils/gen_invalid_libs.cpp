@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <libelf64/elf64.h>
-#include <libelf64/parse.h>
-#include <libelf64/writer.h>
+#include <elfutils/elf-file.h>
+#include <elfutils/parse.h>
+#include <elfutils/writer.h>
 
 #include <iostream>
 #include <set>
@@ -30,7 +30,7 @@
 // Remove the sharedLibs from the .dynamic section.
 // In order to remove the sharedLibs from the .dynamic
 // section, it sets the Elf64_Dyn.d_tag to DT_DEBUG.
-void remove_needed_shared_libs(android::elf64::Elf64Binary& elf64Binary,
+void remove_needed_shared_libs(android::elfutils::Elf64Binary& elf64Binary,
                                const std::set<std::string>& sharedLibs) {
     std::vector<Elf64_Dyn> dynEntries;
 
@@ -49,7 +49,7 @@ void remove_needed_shared_libs(android::elf64::Elf64Binary& elf64Binary,
     elf64Binary.SetDynamicEntries(&dynEntries);
 }
 
-void set_exec_segments_as_rwx(android::elf64::Elf64Binary& elf64Binary) {
+void set_exec_segments_as_rwx(android::elfutils::Elf64Binary& elf64Binary) {
     for (int i = 0; i < elf64Binary.phdrs.size(); i++) {
         if (elf64Binary.phdrs[i].p_flags & PF_X) {
             elf64Binary.phdrs[i].p_flags |= PF_W;
@@ -57,7 +57,8 @@ void set_exec_segments_as_rwx(android::elf64::Elf64Binary& elf64Binary) {
     }
 }
 
-void set_segments_flags(android::elf64::Elf64Binary& elf64Binary, std::vector<int>& segmentFlags) {
+void set_segments_flags(android::elfutils::Elf64Binary& elf64Binary,
+                        std::vector<int>& segmentFlags) {
     int segmentIndex = 0;
     for (int i = 0; i < elf64Binary.phdrs.size(); i++) {
         if (elf64Binary.phdrs[i].p_type == PT_LOAD) {
@@ -69,7 +70,7 @@ void set_segments_flags(android::elf64::Elf64Binary& elf64Binary, std::vector<in
     }
 }
 
-void set_segments_alignment(android::elf64::Elf64Binary& elf64Binary, long alignment) {
+void set_segments_alignment(android::elfutils::Elf64Binary& elf64Binary, long alignment) {
     for (int i = 0; i < elf64Binary.phdrs.size(); i++) {
         if (elf64Binary.phdrs[i].p_type == PT_LOAD) {
             elf64Binary.phdrs[i].p_align = alignment;
@@ -77,16 +78,16 @@ void set_segments_alignment(android::elf64::Elf64Binary& elf64Binary, long align
     }
 }
 
-void gen_lib_with_custom_segment_and_alignment(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_custom_segment_and_alignment(const android::elfutils::Elf64Binary& elf64Binary,
                                                const std::string& newSharedLibName,
                                                std::vector<int>& segmentFlags, long alignment) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
     set_segments_flags(copyElf64Binary, segmentFlags);
     set_segments_alignment(copyElf64Binary, alignment);
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
-void gen_lib_with_rx_rw_rx_and_custom_alignment(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_rx_rw_rx_and_custom_alignment(const android::elfutils::Elf64Binary& elf64Binary,
                                                 const std::string& newSharedLibName) {
     std::vector<int> segmentFlags;
     segmentFlags.push_back(PF_R | PF_X);
@@ -97,7 +98,7 @@ void gen_lib_with_rx_rw_rx_and_custom_alignment(const android::elf64::Elf64Binar
                                               alignment);
 }
 
-void gen_lib_with_rw_rx_rw_and_custom_alignment(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_rw_rx_rw_and_custom_alignment(const android::elfutils::Elf64Binary& elf64Binary,
                                                 const std::string& newSharedLibName) {
     std::vector<int> segmentFlags;
     segmentFlags.push_back(PF_R | PF_W);
@@ -109,29 +110,29 @@ void gen_lib_with_rw_rx_rw_and_custom_alignment(const android::elf64::Elf64Binar
 }
 
 // Generates a shared library with the executable segments as read/write/exec.
-void gen_lib_with_rwx_segment(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_rwx_segment(const android::elfutils::Elf64Binary& elf64Binary,
                               const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
     set_exec_segments_as_rwx(copyElf64Binary);
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
 // Generates a shared library with the size of the section headers as zero.
-void gen_lib_with_zero_shentsize(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_zero_shentsize(const android::elfutils::Elf64Binary& elf64Binary,
                                  const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
 
     copyElf64Binary.ehdr.e_shentsize = 0;
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
 // Generates a shared library with invalid section header string table index.
-void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_zero_shstrndx(const android::elfutils::Elf64Binary& elf64Binary,
                                 const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
 
     copyElf64Binary.ehdr.e_shstrndx = 0;
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
 // Generates a shared library with text relocations set in DT_FLAGS dynamic
@@ -139,9 +140,9 @@ void gen_lib_with_zero_shstrndx(const android::elf64::Elf64Binary& elf64Binary,
 //
 //  $ readelf -d libtest_invalid-textrels.so | grep TEXTREL
 //  0x000000000000001e (FLAGS)              TEXTREL BIND_NOW
-void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_text_relocs_in_flags(const android::elfutils::Elf64Binary& elf64Binary,
                                        const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
     std::vector<Elf64_Dyn> dynEntries;
     bool found = false;
 
@@ -162,7 +163,7 @@ void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64B
     }
 
     copyElf64Binary.SetDynamicEntries(&dynEntries);
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
 // Generates a shared library with a DT_TEXTREL dynamic entry.
@@ -170,9 +171,9 @@ void gen_lib_with_text_relocs_in_flags(const android::elf64::Elf64Binary& elf64B
 //
 // $ readelf -d arm64/libtest_invalid-textrels2.so  | grep TEXTREL
 // 0x0000000000000016 (TEXTREL)            0x0
-void gen_lib_with_text_relocs_dyn_entry(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_text_relocs_dyn_entry(const android::elfutils::Elf64Binary& elf64Binary,
                                         const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
     std::vector<Elf64_Dyn> dynEntries;
     bool found = false;
 
@@ -192,7 +193,7 @@ void gen_lib_with_text_relocs_dyn_entry(const android::elf64::Elf64Binary& elf64
     }
 
     copyElf64Binary.SetDynamicEntries(&dynEntries);
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
 // Generates a shared library which executable header indicates that there
@@ -203,23 +204,23 @@ void gen_lib_with_text_relocs_dyn_entry(const android::elf64::Elf64Binary& elf64
 // $ readelf -h libtest_invalid-empty_shdr_table.so | grep Number
 // Number of program headers:         8
 // Number of section headers:         0 (0)
-void gen_lib_with_empty_shdr_table(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_empty_shdr_table(const android::elfutils::Elf64Binary& elf64Binary,
                                    const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
 
     copyElf64Binary.ehdr.e_shnum = 0;
-    android::elf64::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
+    android::elfutils::Elf64Writer::WriteElf64File(copyElf64Binary, newSharedLibName);
 }
 
-void set_shdr_table_offset(const android::elf64::Elf64Binary& elf64Binary,
+void set_shdr_table_offset(const android::elfutils::Elf64Binary& elf64Binary,
                            const std::string& newSharedLibName, const Elf64_Off invalidOffset) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
 
     // Set an invalid offset for the section headers.
     copyElf64Binary.ehdr.e_shoff = invalidOffset;
 
     std::cout << "Writing ELF64 binary to file " << newSharedLibName << std::endl;
-    android::elf64::Elf64Writer elf64Writer(newSharedLibName);
+    android::elfutils::Elf64Writer elf64Writer(newSharedLibName);
     elf64Writer.WriteHeader(copyElf64Binary.ehdr);
     elf64Writer.WriteProgramHeaders(copyElf64Binary.phdrs, copyElf64Binary.ehdr.e_phoff);
     elf64Writer.WriteSections(copyElf64Binary.sections, copyElf64Binary.shdrs);
@@ -230,7 +231,7 @@ void set_shdr_table_offset(const android::elf64::Elf64Binary& elf64Binary,
 
 // Generates a shared library which executable header has an invalid
 // section header offset.
-void gen_lib_with_unaligned_shdr_offset(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_unaligned_shdr_offset(const android::elfutils::Elf64Binary& elf64Binary,
                                         const std::string& newSharedLibName) {
     const Elf64_Off unalignedOffset = elf64Binary.ehdr.e_shoff + 1;
     set_shdr_table_offset(elf64Binary, newSharedLibName, unalignedOffset);
@@ -238,19 +239,19 @@ void gen_lib_with_unaligned_shdr_offset(const android::elf64::Elf64Binary& elf64
 
 // Generates a shared library which executable header has ZERO as
 // section header offset.
-void gen_lib_with_zero_shdr_table_offset(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_zero_shdr_table_offset(const android::elfutils::Elf64Binary& elf64Binary,
                                          const std::string& newSharedLibName) {
     const Elf64_Off zeroOffset = 0;
     set_shdr_table_offset(elf64Binary, newSharedLibName, zeroOffset);
 }
 
 // Generates a shared library which section headers are all ZERO.
-void gen_lib_with_zero_shdr_table_content(const android::elf64::Elf64Binary& elf64Binary,
+void gen_lib_with_zero_shdr_table_content(const android::elfutils::Elf64Binary& elf64Binary,
                                           const std::string& newSharedLibName) {
-    android::elf64::Elf64Binary copyElf64Binary = elf64Binary;
+    android::elfutils::Elf64Binary copyElf64Binary = elf64Binary;
 
     std::cout << "Writing ELF64 binary to file " << newSharedLibName << std::endl;
-    android::elf64::Elf64Writer elf64Writer(newSharedLibName);
+    android::elfutils::Elf64Writer elf64Writer(newSharedLibName);
     elf64Writer.WriteHeader(copyElf64Binary.ehdr);
     elf64Writer.WriteProgramHeaders(copyElf64Binary.phdrs, copyElf64Binary.ehdr.e_phoff);
     elf64Writer.WriteSections(copyElf64Binary.sections, copyElf64Binary.shdrs);
@@ -287,8 +288,8 @@ int main(int argc, char* argv[]) {
     std::string baseSharedLibName(argv[1]);
     std::string outputDir(argv[2]);
 
-    android::elf64::Elf64Binary elf64Binary;
-    if (android::elf64::Elf64Parser::ParseElfFile(baseSharedLibName, elf64Binary)) {
+    android::elfutils::Elf64Binary elf64Binary;
+    if (android::elfutils::Elf64Parser::ParseElfFile(baseSharedLibName, elf64Binary)) {
         std::set<std::string> libsToRemove = {"libc++_shared.so"};
         remove_needed_shared_libs(elf64Binary, libsToRemove);
 

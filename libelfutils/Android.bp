@@ -15,34 +15,54 @@
 //
 
 package {
-    default_team: "trendy_team_android_kernel",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_test {
-    name: "elf_alignment_test",
-    require_root: true,
-    test_suites: [
-        "general-tests",
-        "vts",
+cc_library {
+    name: "libelfutils",
+    host_supported: true,
+    local_include_dirs: [
+        "include",
     ],
-
+    export_include_dirs: [
+        "include",
+    ],
     srcs: [
-        "elf_alignment_test.cpp",
+        "comparator.cpp",
+        "iter.cpp",
+        "parse.cpp",
+        "writer.cpp",
     ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+}
 
+cc_binary {
+    name: "gen_invalid_libs",
+    host_supported: true,
+    srcs: [
+        "gen_invalid_libs.cpp",
+    ],
     static_libs: [
-        "libdm",
-        "libext2_uuid",
-        "libfs_mgr",
-        "libelf64",
+        "libelfutils",
     ],
-
-    shared_libs: [
-        "libbase",
-        "liblog",
+    cflags: [
+        "-Wall",
+        "-Werror",
     ],
+}
 
+cc_binary {
+    name: "compare_libs",
+    host_supported: true,
+    srcs: [
+        "compare_libs.cpp",
+    ],
+    static_libs: [
+        "libelfutils",
+    ],
     cflags: [
         "-Wall",
         "-Werror",

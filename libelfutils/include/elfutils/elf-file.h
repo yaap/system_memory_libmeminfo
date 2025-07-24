@@ -25,14 +25,14 @@
 #include <elf.h>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 // Section content representation
 typedef struct {
-    std::vector<char> data;   // Raw content of the data section.
-    uint64_t size;   // Size of the data section.
-    std::string name;      // The name of the section.
-    uint16_t index;  // Index of the section.
+    std::vector<char> data;  // Raw content of the data section.
+    uint64_t size;           // Size of the data section.
+    std::string name;        // The name of the section.
+    uint16_t index;          // Index of the section.
 } Elf64_Sc;
 
 // Class to represent an ELF64 binary.
@@ -156,5 +156,5 @@ class Elf64Binary {
     }
 };
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android

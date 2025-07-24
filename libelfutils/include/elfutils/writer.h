@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <libelf64/elf64.h>
+#include <elfutils/elf-file.h>
 
 #include <stdint.h>
 #include <fstream>
@@ -26,7 +26,7 @@
 #include <elf.h>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 // Class to write elf64 binaries to files. It provides methods
 // to write the different parts of the efl64 binary:
@@ -38,16 +38,16 @@ namespace elf64 {
 //
 // The basic usage of the library is:
 //
-//       android::elf64::Elf64Binary elf64Binary;
+//       android::elfutils::Elf64Binary elf64Binary;
 //       // Populate elf64Binary
 //       elf64Binary.ehdr.e_phoff = 0xBEEFFADE
 //       std::string fileName("new_binary.so");
-//       android::elf64::Elf64Writer::WriteElfFile(elf64Binary, fileName);
+//       android::elfutils::Elf64Writer::WriteElfFile(elf64Binary, fileName);
 //
 // If it is necessary to have more control about the different parts
 // that need to be written or omitted, we can use:
 //
-//       android::elf64::Elf64Binary elf64Binary;
+//       android::elfutils::Elf64Binary elf64Binary;
 //       // Populate elf64Binary
 //
 //       std::string fileName("new_binary.so");
@@ -74,5 +74,5 @@ class Elf64Writer {
     void Write(const char* const data, const std::streamsize size);
 };
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android

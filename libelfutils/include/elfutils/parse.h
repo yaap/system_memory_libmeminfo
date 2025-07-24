@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <libelf64/elf64.h>
+#include <elfutils/elf-file.h>
 
 #include <fstream>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 // Class to parse ELF64 binaries.
 //
@@ -34,10 +34,10 @@ namespace elf64 {
 //
 // The basic usage of the library is:
 //
-//       android::elf64::Elf64Binary elf64Binary;
+//       android::elfutils::Elf64Binary elf64Binary;
 //       std::string fileName("new_binary.so");
 //       // The content of the elf file will be populated in elf64Binary.
-//       android::elf64::Elf64Parser::ParseElfFile(fileName, elf64Binary);
+//       android::elfutils::Elf64Parser::ParseElfFile(fileName, elf64Binary);
 //
 class Elf64Parser {
   public:
@@ -57,5 +57,5 @@ class Elf64Parser {
     bool ParseSectionHeaders();
 };
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android

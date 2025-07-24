@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <libelf64/writer.h>
+#include <elfutils/writer.h>
 
-#include <libelf64/elf64.h>
+#include <elfutils/elf-file.h>
 
 #include <stdlib.h>
 #include <fstream>
@@ -27,7 +27,7 @@
 #include <elf.h>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 void Elf64Writer::WriteElf64File(const Elf64Binary& elf64Binary, const std::string& fileName) {
     std::cout << "Writing ELF64 binary to file " << fileName << std::endl;
@@ -90,5 +90,5 @@ void Elf64Writer::Write(const char* const data, const std::streamsize size) {
     }
 }
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android

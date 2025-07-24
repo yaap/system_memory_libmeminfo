@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <libelf64/elf64.h>
+#include <elfutils/elf-file.h>
 
 #include <elf.h>
 #include <vector>
 
 namespace android {
-namespace elf64 {
+namespace elfutils {
 
 // Class to compare ELF64 binaries (shared libraries, executables).
 //
@@ -54,5 +54,5 @@ class Elf64Comparator {
                         const std::vector<Elf64_Sc>& sections2);
 };
 
-}  // namespace elf64
+}  // namespace elfutils
 }  // namespace android
