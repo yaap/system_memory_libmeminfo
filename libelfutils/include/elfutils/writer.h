@@ -20,6 +20,7 @@
 
 #include <stdint.h>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,50 +29,103 @@
 namespace android {
 namespace elfutils {
 
-// Class to write elf64 binaries to files. It provides methods
-// to write the different parts of the efl64 binary:
-//
-// - Executable Header (Elf64_Ehdr)
-// - Program Headers (Elf64_Phdr)
-// - Section Headers (Elf64_Shdr)
-// - Sections (content)
-//
-// The basic usage of the library is:
-//
-//       android::elfutils::Elf64Binary elf64Binary;
-//       // Populate elf64Binary
-//       elf64Binary.ehdr.e_phoff = 0xBEEFFADE
-//       std::string fileName("new_binary.so");
-//       android::elfutils::Elf64Writer::WriteElfFile(elf64Binary, fileName);
-//
-// If it is necessary to have more control about the different parts
-// that need to be written or omitted, we can use:
-//
-//       android::elfutils::Elf64Binary elf64Binary;
-//       // Populate elf64Binary
-//
-//       std::string fileName("new_binary.so");
-//       Elf64Writer elf64Writer(fileName);
-//
-//       elf64Writer.WriteHeader(elf64Binary.ehdr);
-//       elf64Writer.WriteProgramHeaders(elf64Binary.phdrs, 0xBEEF);
-//       elf64Writer.WriteSectionHeaders(elf64Binary.shdrs, 0xFADE);
-//       elf64Writer.WriteSections(elf64Binary.sections, elf64Binary.shdrs);
-//
-class Elf64Writer {
+template <typename ElfFile_t>
+class ElfWriter {
   public:
-    Elf64Writer(const std::string& fileName);
+    ElfWriter(const ElfFile_t& elfFile, const std::string& outPath)
+        : mElfFile(elfFile), mOutStream(outPath) {}
 
-    void WriteHeader(const Elf64_Ehdr& ehdr);
-    void WriteProgramHeaders(const std::vector<Elf64_Phdr>& phdrs, const Elf64_Off phoff);
-    void WriteSectionHeaders(const std::vector<Elf64_Shdr>& shdrs, const Elf64_Off shoff);
-    void WriteSections(const std::vector<Elf64_Sc>& sections, const std::vector<Elf64_Shdr>& shdrs);
+    ~ElfWriter() = default;
 
-    static void WriteElf64File(const Elf64Binary& elf64Binary, const std::string& fileName);
+    using Elf_Ehdr = typename ElfFile_t::Elf_Ehdr;
+    using Elf_Phdr = typename ElfFile_t::Elf_Phdr;
+    using Elf_Shdr = typename ElfFile_t::Elf_Shdr;
+
+    bool writeElfHeader(std::optional<uint64_t> ehdrOffset = std::nullopt) {
+        if (!mOutStream) {
+            return false;
+        }
+
+        mOutStream.seekp(ehdrOffset.value_or(0));
+        if (!mOutStream) {
+            return false;
+        }
+
+        mOutStream.write(reinterpret_cast<const char*>(&mElfFile.getEhdr()), sizeof(Elf_Ehdr));
+
+        return !!mOutStream;
+    }
+
+    bool writeProgramHeaders(std::optional<uint64_t> phdrOffset = std::nullopt) {
+        if (!mOutStream) {
+            return false;
+        }
+
+        mOutStream.seekp(phdrOffset.value_or(mElfFile.getEhdr().e_phoff));
+        if (!mOutStream) {
+            return false;
+        }
+
+        for (const auto& phdr : mElfFile.getPhdrs()) {
+            mOutStream.write(reinterpret_cast<const char*>(&phdr), sizeof(Elf_Phdr));
+        }
+
+        return !!mOutStream;
+    }
+
+    bool writeSectionHeaders(std::optional<uint64_t> shdrOffset = std::nullopt) {
+        if (!mOutStream) {
+            return false;
+        }
+
+        mOutStream.seekp(shdrOffset.value_or(mElfFile.getEhdr().e_shoff));
+        if (!mOutStream) {
+            return false;
+        }
+
+        for (const auto& phdr : mElfFile.getShdrs()) {
+            mOutStream.write(reinterpret_cast<const char*>(&phdr), sizeof(Elf_Shdr));
+        }
+
+        return !!mOutStream;
+    }
+
+    bool writeSections(std::vector<uint64_t> shdrOffsets = {}) {
+        if (!mOutStream) {
+            return false;
+        }
+
+        std::vector<uint64_t> offsets;
+        if (!shdrOffsets.empty()) {
+            offsets = shdrOffsets;
+        } else {
+            for (const auto& shdr : mElfFile.getShdrs()) {
+                offsets.push_back(shdr.sh_offset);
+            }
+        }
+
+        const auto& sections = mElfFile.getSections();
+
+        for (const auto& section : sections) {
+            if (section.data.empty()) {
+                continue;
+            }
+
+            mOutStream.seekp(offsets[section.index]);
+            mOutStream.write(section.data.data(), section.size);
+        }
+
+        return !!mOutStream;
+    }
+
+    bool writeElf() {
+        return writeElfHeader() && writeProgramHeaders() && writeSectionHeaders() &&
+               writeSections();
+    }
 
   private:
-    std::ofstream elf64stream;
-    void Write(const char* const data, const std::streamsize size);
+    const ElfFile_t& mElfFile;
+    std::ofstream mOutStream;
 };
 
 }  // namespace elfutils

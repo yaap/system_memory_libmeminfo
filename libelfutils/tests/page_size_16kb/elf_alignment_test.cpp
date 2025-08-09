@@ -46,7 +46,7 @@ static inline bool startsWithPattern(const std::string& str, const std::string& 
     return std::regex_match(str, _pattern);
 }
 
-static std::set<std::string> GetMounts() {
+static std::set<std::string> getMounts() {
     std::unique_ptr<std::FILE, int (*)(std::FILE*)> fp(setmntent("/proc/mounts", "re"), endmntent);
     std::set<std::string> exclude({"/", "/config", "/data", "/data_mirror", "/dev", "/linkerconfig",
                                    "/mnt", "/proc", "/storage", "/sys"});
@@ -58,9 +58,9 @@ static std::set<std::string> GetMounts() {
 
     mntent* mentry;
     while ((mentry = getmntent(fp.get())) != nullptr) {
-        std::string mount_dir(mentry->mnt_dir);
+        std::string mountDir(mentry->mnt_dir);
 
-        std::string dir = "/" + android::base::Split(mount_dir, "/")[1];
+        std::string dir = "/" + android::base::Split(mountDir, "/")[1];
 
         if (exclude.find(dir) != exclude.end()) {
             continue;
@@ -72,9 +72,13 @@ static std::set<std::string> GetMounts() {
     return mounts;
 }
 
+using ::android::elfutils::ElfFile;
+
 class ElfAlignmentTest : public ::testing::TestWithParam<std::string> {
   protected:
-    static void LoadAlignmentCb(const android::elfutils::Elf64Binary& elf) {
+    static void loadAlignmentCb(ElfFile& elfFile) {
+        using namespace android::elfutils;
+
         static std::array ignored_directories{
                 // Ignore VNDK APEXes. They are prebuilts from old branches, and would
                 // only be used on devices with old vendor images.
@@ -89,55 +93,53 @@ class ElfAlignmentTest : public ::testing::TestWithParam<std::string> {
                 // Ignore TEE binaries ("glob: /apex/com.*.android.authfw.ta*")
                 escapeForRegex("/apex/com.") + ".*" + escapeForRegex(".android.authfw.ta")};
 
+        // Don't check 32-bit ELFs
+        if (elfFile.is32Bit()) return;
+
+        std::string path = elfFile.getPath();
         for (const auto& pattern : ignored_directories) {
-            if (startsWithPattern(elf.path, pattern)) {
+            if (startsWithPattern(path, pattern)) {
                 return;
             }
         }
 
         // Ignore ART Odex files for now. They are not 16K aligned.
         // b/376814207
-        if (elf.path.ends_with(".odex")) {
+        if (path.ends_with(".odex")) {
             return;
         }
 
-        for (int i = 0; i < elf.phdrs.size(); i++) {
-            Elf64_Phdr phdr = elf.phdrs[i];
-
-            if (phdr.p_type != PT_LOAD) {
-                continue;
-            }
-
-            uint64_t p_align = phdr.p_align;
-
-            EXPECT_GE(p_align, kRequiredMaxSupportedPageSize)
-                    << " " << elf.path << " is not at least 16KiB aligned";
+        if (auto minAlign = elfFile.getMinLoadSegmentAlignment()) {
+            EXPECT_GE(*minAlign, kRequiredMaxSupportedPageSize)
+                    << " " << path << " is not at least 16KiB aligned";
         }
     };
 
-    static bool IsLowRamDevice() { return android::base::GetBoolProperty(kLowRamProp, false); }
+    static bool isLowRamDevice() { return android::base::GetBoolProperty(kLowRamProp, false); }
 
-    static int VendorApiLevel() {
+    static int vendorApiLevel() {
         // "ro.vendor.api_level" is added in Android T. Undefined indicates S or below
         return android::base::GetIntProperty(kVendorApiLevelProp, __ANDROID_API_S__);
     }
 
     void SetUp() override {
-        if (VendorApiLevel() < 202404) {
+        if (vendorApiLevel() < 202404) {
             GTEST_SKIP() << "16kB support is only required on V and later releases.";
-        } else if (IsLowRamDevice()) {
+        } else if (isLowRamDevice()) {
             GTEST_SKIP() << "Low Ram devices only support 4kB page size";
         }
     }
 };
 
+using ::android::elfutils::ElfIterator;
+
 // @VsrTest = 3.14.1
 TEST_P(ElfAlignmentTest, VerifyLoadSegmentAlignment) {
-    android::elfutils::ForEachElf64FromDir(GetParam(), &LoadAlignmentCb);
+    ElfIterator::forEachElfFromDir(GetParam(), &loadAlignmentCb);
 }
 
 INSTANTIATE_TEST_SUITE_P(ElfTestPartitionsAligned, ElfAlignmentTest,
-                         ::testing::ValuesIn(GetMounts()));
+                         ::testing::ValuesIn(getMounts()));
 
 int main(int argc, char* argv[]) {
     ::testing::InitGoogleTest(&argc, argv);

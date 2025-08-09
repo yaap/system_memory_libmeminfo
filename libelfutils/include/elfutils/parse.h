@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <android-base/logging.h>
 #include <elfutils/elf-file.h>
 
 #include <fstream>
@@ -23,38 +24,145 @@
 namespace android {
 namespace elfutils {
 
-// Class to parse ELF64 binaries.
-//
-// The class will parse the 4 parts if present:
-//
-// - Executable header (Elf64_Ehdr).
-// - Program headers (Elf64_Phdr - present in executables or shared libraries).
-// - Section headers (Elf64_Shdr)
-// - Sections (.interp, .init, .plt, .text, .rodata, .data, .bss, .shstrtab, etc).
-//
-// The basic usage of the library is:
-//
-//       android::elfutils::Elf64Binary elf64Binary;
-//       std::string fileName("new_binary.so");
-//       // The content of the elf file will be populated in elf64Binary.
-//       android::elfutils::Elf64Parser::ParseElfFile(fileName, elf64Binary);
-//
-class Elf64Parser {
+/*
+ * Class to parse ELF binaries.
+ *
+ * The class will parse the 4 parts if present
+ *
+ * - Executable header (Elf64_Ehdr or Elf32_Ehdr).
+ * - Program headers (Elf64_Phdr or Elf32_Phdr - present in executables or shared libraries).
+ * - Section headers (Elf64_Shdr or Elf32_Shdr)
+ * - Sections (.interp, .init, .plt, .text, .rodata, .data, .bss, .shstrtab, etc).
+ *
+ * The parser is used internally by ElfFile::create() to populate its fields.
+ */
+template <typename ElfFile_t>
+class ElfParser {
   public:
-    // Parse the elf file and populate the elfBinary object.
-    // Returns true if the parsing was successful, otherwise false.
-    [[nodiscard]] static bool ParseElfFile(const std::string& fileName, Elf64Binary& elfBinary);
-    static bool IsElf64(const std::string& fileName);
+    explicit ElfParser(ElfFile_t& elfFile) : mElfFile(elfFile), mElfStream(mElfFile.getPath()) {}
+
+    ~ElfParser() = default;
+
+    [[nodiscard]] bool parse() {
+        return parseExecutableHeader(mElfFile.mEhdr) &&
+               parseProgramHeaders(mElfFile.mEhdr, mElfFile.mPhdrs) &&
+               parseSectionHeaders(mElfFile.mEhdr, mElfFile.mShdrs) &&
+               parseSections(mElfFile.mEhdr, mElfFile.mShdrs, mElfFile.mSections);
+    }
 
   private:
-    std::ifstream elf64stream;
-    Elf64Binary* elfBinaryPtr;
+    ElfFile_t& mElfFile;
+    std::ifstream mElfStream;
 
-    Elf64Parser(const std::string& fileName, Elf64Binary& elfBinary);
-    bool ParseExecutableHeader();
-    bool ParseProgramHeaders();
-    bool ParseSections();
-    bool ParseSectionHeaders();
+    using Elf_Ehdr = typename ElfFile_t::Elf_Ehdr;
+    using Elf_Phdr = typename ElfFile_t::Elf_Phdr;
+    using Elf_Shdr = typename ElfFile_t::Elf_Shdr;
+    using Elf_Dyn = typename ElfFile_t::Elf_Dyn;
+
+    bool parseExecutableHeader(Elf_Ehdr& ehdr) {
+        if (!mElfStream) {
+            return false;
+        }
+
+        mElfStream.seekg(0);
+        mElfStream.read((char*)&ehdr, sizeof(ehdr));
+
+        return !!mElfStream;
+    }
+
+    bool parseProgramHeaders(const Elf_Ehdr& ehdr, std::vector<Elf_Phdr>& phdrs) {
+        uint64_t phOffset = ehdr.e_phoff;
+        uint16_t phNum = ehdr.e_phnum;
+
+        if (!mElfStream) {
+            return false;
+        }
+
+        mElfStream.seekg(phOffset);
+        for (int i = 0; i < phNum; i++) {
+            Elf_Phdr phdr;
+
+            mElfStream.read((char*)&phdr, sizeof(phdr));
+            if (!mElfStream) {
+                return false;
+            }
+
+            phdrs.push_back(phdr);
+        }
+
+        return !!mElfStream;
+    }
+
+    bool parseSectionHeaders(const Elf_Ehdr& ehdr, std::vector<Elf_Shdr>& shdrs) {
+        uint64_t shOffset = ehdr.e_shoff;
+        uint16_t shNum = ehdr.e_shnum;
+
+        if (!mElfStream) {
+            return false;
+        }
+
+        mElfStream.seekg(shOffset);
+        for (int i = 0; i < shNum; i++) {
+            Elf_Shdr shdr;
+
+            mElfStream.read((char*)&shdr, sizeof(shdr));
+            if (!mElfStream) {
+                return false;
+            }
+
+            shdrs.push_back(shdr);
+        }
+
+        return !!mElfStream;
+    }
+
+    bool parseSections(const Elf_Ehdr& ehdr, const std::vector<Elf_Shdr>& shdrs,
+                       std::vector<Elf_Sc>& sections) {
+        Elf_Sc sStrTblPtr;
+
+        if (!mElfStream) {
+            return false;
+        }
+
+        for (size_t i = 0; i < shdrs.size(); i++) {
+            uint64_t sOffset = shdrs[i].sh_offset;
+            uint64_t sSize = shdrs[i].sh_size;
+
+            Elf_Sc section;
+            if (shdrs[i].sh_type != SHT_NOBITS) {
+                section.data.resize(sSize);
+                mElfStream.seekg(sOffset);
+
+                mElfStream.read(section.data.data(), sSize);
+                if (!mElfStream) {
+                    return false;
+                }
+            }
+
+            section.size = sSize;
+            section.index = i;
+
+            if (ehdr.e_shstrndx == i) {
+                sStrTblPtr = section;
+            }
+
+            sections.push_back(section);
+        }
+
+        // Set the data section names.
+        // This has to be done after reading the data section with index e_shstrndx.
+        for (size_t i = 0; i < sections.size(); i++) {
+            uint32_t nameIdx = shdrs[i].sh_name;
+            char* st = sStrTblPtr.data.data();
+
+            if (nameIdx < sStrTblPtr.size) {
+                CHECK_NE(memchr(&st[nameIdx], 0, sStrTblPtr.size - nameIdx), nullptr);
+                sections[i].name = &st[nameIdx];
+            }
+        }
+
+        return !!mElfStream;
+    }
 };
 
 }  // namespace elfutils

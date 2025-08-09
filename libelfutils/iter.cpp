@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+#include <elfutils/elf-file.h>
 #include <elfutils/iter.h>
 #include <elfutils/parse.h>
 
@@ -21,25 +22,24 @@
 namespace android {
 namespace elfutils {
 
-int ForEachElf64FromDir(const std::string& path, const Elf64Callback& callback) {
-    int nr_parsed = 0;
+int ElfIterator::forEachElfFromDir(const std::string& dir, const ElfCallback& callback) {
+    int nrParsed = 0;
 
-    for (const std::filesystem::directory_entry& dir_entry :
-         std::filesystem::recursive_directory_iterator(path)) {
-        if (dir_entry.is_symlink() || !dir_entry.is_regular_file()) continue;
+    for (const std::filesystem::directory_entry& dirEntry :
+         std::filesystem::recursive_directory_iterator(dir)) {
+        if (dirEntry.is_symlink() || !dirEntry.is_regular_file()) continue;
 
-        std::string name = dir_entry.path();
-        android::elfutils::Elf64Binary elf64Binary;
-        if (Elf64Parser::ParseElfFile(name, elf64Binary)) {
-            nr_parsed++;
-        } else {
-            continue;
-        }
+        std::string file = dirEntry.path();
 
-        callback(elf64Binary);
+        std::unique_ptr<ElfFile> elfFile = ElfFile::create(file);
+        if (!elfFile) continue;
+
+        nrParsed++;
+
+        callback(*elfFile);
     }
 
-    return nr_parsed;
+    return nrParsed;
 }
 
 }  // namespace elfutils

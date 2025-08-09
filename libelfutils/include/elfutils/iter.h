@@ -16,20 +16,22 @@
 
 #pragma once
 
-#include <elfutils/parse.h>
+#include <elfutils/elf-file.h>
 
 #include <functional>
 
 namespace android {
 namespace elfutils {
 
-using Elf64Callback = std::function<void(const Elf64Binary&)>;
+using ElfCallback = std::function<void(ElfFile&)>;
 
-// Public APIs
-/**
- * Returns the number of ELF files were processed successfully.
- */
-int ForEachElf64FromDir(const std::string& path, const Elf64Callback& callback);
+class ElfIterator {
+  public:
+    /*
+     * Returns the number of ELF files processed.
+     */
+    static int forEachElfFromDir(const std::string& dir, const ElfCallback& callback);
+};
 
 }  // namespace elfutils
 }  // namespace android
