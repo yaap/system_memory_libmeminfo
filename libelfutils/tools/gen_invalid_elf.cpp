@@ -98,6 +98,36 @@ class InvalidElfFile : public ElfFile_t {
             memset(&shdr, 0, sizeof(shdr));
         }
     }
+
+    void makeInvalid_setLoadSegments_RW_RX_RW() {
+        std::vector<decltype(this->mPhdrs.begin())> load_segments;
+        for (auto it = this->mPhdrs.begin(); it != this->mPhdrs.end(); ++it) {
+            if (it->p_type == PT_LOAD) {
+                load_segments.push_back(it);
+            }
+        }
+
+        if (load_segments.size() >= 3) {
+            load_segments[0]->p_flags = PF_R | PF_W;
+            load_segments[1]->p_flags = PF_R | PF_X;
+            load_segments[2]->p_flags = PF_R | PF_W;
+        }
+    }
+
+    void makeInvalid_setLoadSegments_RX_RW_RX() {
+        std::vector<decltype(this->mPhdrs.begin())> load_segments;
+        for (auto it = this->mPhdrs.begin(); it != this->mPhdrs.end(); ++it) {
+            if (it->p_type == PT_LOAD) {
+                load_segments.push_back(it);
+            }
+        }
+
+        if (load_segments.size() >= 3) {
+            load_segments[0]->p_flags = PF_R | PF_X;
+            load_segments[1]->p_flags = PF_R | PF_W;
+            load_segments[2]->p_flags = PF_R | PF_X;
+        }
+    }
 };
 
 enum class InvalidElfType {
@@ -110,6 +140,8 @@ enum class InvalidElfType {
     kUnalignedShdrOffset,
     kZeroShdrTableContent,
     kZeroShdrTableOffset,
+    kLoadSegments_RW_RX_RW,
+    kLoadSegments_RX_RW_RX,
 };
 
 static const std::map<std::string, InvalidElfType> kInvalidElfTypeMap = {
@@ -122,6 +154,8 @@ static const std::map<std::string, InvalidElfType> kInvalidElfTypeMap = {
         {"unaligned_shdr_offset", InvalidElfType::kUnalignedShdrOffset},
         {"zero_shdr_table_content", InvalidElfType::kZeroShdrTableContent},
         {"zero_shdr_table_offset", InvalidElfType::kZeroShdrTableOffset},
+        {"load_segments_rw_rx_rw", InvalidElfType::kLoadSegments_RW_RX_RW},
+        {"load_segments_rx_rw_rx", InvalidElfType::kLoadSegments_RX_RW_RX},
 };
 
 std::optional<InvalidElfType> getInvalidElfType(const std::string& str) {
@@ -178,6 +212,12 @@ void makeInvalid(InvalidElfFile_t& file, InvalidElfType type) {
             break;
         case InvalidElfType::kZeroShdrTableContent:
             file.makeInvalid_setZeroShdrTableContent();
+            break;
+        case InvalidElfType::kLoadSegments_RW_RX_RW:
+            file.makeInvalid_setLoadSegments_RW_RX_RW();
+            break;
+        case InvalidElfType::kLoadSegments_RX_RW_RX:
+            file.makeInvalid_setLoadSegments_RX_RW_RX();
             break;
     }
 }
