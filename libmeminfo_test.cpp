@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -1373,6 +1374,65 @@ TEST(SysMemInfo, TestReadDmaBufHeapPoolsSizeKb) {
 
     ASSERT_TRUE(ReadDmabufHeapPoolsSizeKb(&size, file));
     EXPECT_EQ(size, 416);
+}
+
+TEST(ProcMemInfo, ParseSizeToBytes_Valid) {
+    EXPECT_EQ(std::optional<uint64_t>(0), ParseSizeToBytes("0MB"));
+    EXPECT_EQ(std::optional<uint64_t>(1024), ParseSizeToBytes("1024B"));
+    EXPECT_EQ(std::optional<uint64_t>(0), ParseSizeToBytes("0GiB"));
+    EXPECT_EQ(std::optional<uint64_t>(1000), ParseSizeToBytes("1K"));
+    EXPECT_EQ(std::optional<uint64_t>(1000), ParseSizeToBytes("1KB"));
+    EXPECT_EQ(std::optional<uint64_t>(1024), ParseSizeToBytes("1KiB"));
+    EXPECT_EQ(std::optional<uint64_t>(10 * 1000), ParseSizeToBytes("10KB"));
+    EXPECT_EQ(std::optional<uint64_t>(10 * 1024), ParseSizeToBytes("10KiB"));
+    EXPECT_EQ(std::optional<uint64_t>(100 * 1000), ParseSizeToBytes("100KB"));
+    EXPECT_EQ(std::optional<uint64_t>(100 * 1024), ParseSizeToBytes("100KiB"));
+    EXPECT_EQ(std::optional<uint64_t>(1000 * 1000), ParseSizeToBytes("1000KB"));
+    EXPECT_EQ(std::optional<uint64_t>(1000 * 1024), ParseSizeToBytes("1000KiB"));
+    EXPECT_EQ(std::optional<uint64_t>(70 * 1000 * 1000), ParseSizeToBytes("70M"));
+    EXPECT_EQ(std::optional<uint64_t>(70 * 1000 * 1000), ParseSizeToBytes("70MB"));
+    EXPECT_EQ(std::optional<uint64_t>(70 * 1024 * 1024), ParseSizeToBytes("70MiB"));
+    EXPECT_EQ(std::optional<uint64_t>(700000 * 1000), ParseSizeToBytes("700000KB"));
+    EXPECT_EQ(std::optional<uint64_t>(700000 * 1024), ParseSizeToBytes("700000KiB"));
+    EXPECT_EQ(std::optional<uint64_t>(200 * 1000 * 1000), ParseSizeToBytes("200MB"));
+    EXPECT_EQ(std::optional<uint64_t>(200 * 1024 * 1024), ParseSizeToBytes("200MiB"));
+    EXPECT_EQ(std::optional<uint64_t>(1000 * 1000 * 1000), ParseSizeToBytes("1000MB"));
+    EXPECT_EQ(std::optional<uint64_t>(1000 * 1024 * 1024), ParseSizeToBytes("1000MiB"));
+    EXPECT_EQ(std::optional<uint64_t>(600ULL * 1024 * 1024 * 1024), ParseSizeToBytes("600GiB"));
+    EXPECT_EQ(std::optional<uint64_t>(999ULL * 1000 * 1000 * 1000), ParseSizeToBytes("999GB"));
+    EXPECT_EQ(std::optional<uint64_t>(999ULL * 1000 * 1000 * 1000), ParseSizeToBytes("999 gB"));
+    EXPECT_EQ(std::optional<uint64_t>(999ULL * 1000 * 1000 * 1000), ParseSizeToBytes("999 gb"));
+    EXPECT_EQ(std::optional<uint64_t>(9999ULL * 1000 * 1000 * 1000), ParseSizeToBytes("9999GB"));
+    EXPECT_EQ(std::optional<uint64_t>(9000ULL * 1000 * 1000 * 1000),
+              ParseSizeToBytes(" 9000 GB   "));
+    EXPECT_EQ(std::optional<uint64_t>(1234ULL * 1000 * 1000 * 1000),
+              ParseSizeToBytes(" 1234 GB  "));
+    EXPECT_EQ(std::optional<uint64_t>(1234567890ULL * 1000), ParseSizeToBytes(" 1234567890 KB  "));
+    EXPECT_EQ(std::optional<uint64_t>(1234567890ULL * 1024), ParseSizeToBytes(" 1234567890 KiB  "));
+    EXPECT_EQ(std::optional<uint64_t>(123), ParseSizeToBytes("123B"));
+}
+
+TEST(ProcMemInfo, ParseSizeToBytes_Invalid) {
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("null"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes(""));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("     "));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("KB"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("123 dd"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("Invalid"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes(" ABC890 KB  "));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("-=+90 KB  "));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("--123"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("-KB"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("++123"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("+"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("+ 1 +"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("+--+ 1 +"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("1GB+"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes(" -1 b "));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes(" -0 gib "));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("+200MB"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("200"));
+    EXPECT_EQ(std::nullopt, ParseSizeToBytes("0200MB"));
 }
 
 int main(int argc, char** argv) {

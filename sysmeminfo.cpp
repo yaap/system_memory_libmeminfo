@@ -32,6 +32,7 @@
 #if defined(__ANDROID__) && !defined(__ANDROID_APEX__) && !defined(__ANDROID_VNDK__)
 #include "bpf/BpfMap.h"
 #endif
+#include <regex>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -336,8 +337,12 @@ bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& dma_heap_pool_
 bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_root_path,
                                    const std::string& dmabuf_sysfs_stats_path) {
     static bool support_dmabuf_heaps = [dma_heap_root_path]() -> bool {
-        bool ret = (access(dma_heap_root_path.c_str(), R_OK) == 0);
-        if (!ret) LOG(ERROR) << "DMA-BUF heaps not supported, read ION heap total instead.";
+        int access_ret = access(dma_heap_root_path.c_str(), R_OK);
+        bool ret = (access_ret == 0);
+        if (!ret) {
+            LOG(ERROR) << "DMA-BUF heaps not supported, read ION heap total instead. access() "
+                       << "returned " << access_ret << ", errno: " << strerror(errno);
+        }
         return ret;
     }();
 
@@ -517,6 +522,42 @@ bool ReadKernelCmaUsageKb(uint64_t* size, const std::string& cma_stats_sysfs_pat
     }
 
     return true;
+}
+
+std::optional<uint64_t> ParseSizeToBytes(const std::string& str) {
+    if (str.empty()) {
+        return std::nullopt;
+    }
+
+    static const std::regex sizeRegex(R"(\s*(0|[1-9][0-9]*)\s*(B|[KMG](?:i?B)?)\s*)",
+                                      std::regex::icase);
+    std::smatch match;
+
+    if (std::regex_match(str, match, sizeRegex)) {
+        uint64_t value;
+        if (android::base::ParseUint(match[1].str(), &value)) {
+            std::string unitStr = match[2].str();
+            std::transform(unitStr.begin(), unitStr.end(), unitStr.begin(), ::toupper);
+
+            if (unitStr == "GIB" || unitStr == "GI") {
+                return value * 1024 * 1024 * 1024;
+            } else if (unitStr == "GB" || unitStr == "G") {
+                return value * 1000 * 1000 * 1000;
+            } else if (unitStr == "MIB" || unitStr == "MI") {
+                return value * 1024 * 1024;
+            } else if (unitStr == "MB" || unitStr == "M") {
+                return value * 1000 * 1000;
+            } else if (unitStr == "KIB" || unitStr == "KI") {
+                return value * 1024;
+            } else if (unitStr == "KB" || unitStr == "K") {
+                return value * 1000;
+            } else if (unitStr == "B") {
+                return value;
+            }
+        }
+    }
+
+    return std::nullopt;
 }
 
 }  // namespace meminfo
