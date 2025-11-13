@@ -17,7 +17,7 @@
 #ifndef MEM_EVENTS_BPF_HELPERS_H_
 #define MEM_EVENTS_BPF_HELPERS_H_
 
-#include <bpf_helpers.h>
+#include <android_bpf_defs.h>
 
 static inline void read_str(char* base, uint32_t __data_loc_var, char* str, uint32_t size) {
     short offset = __data_loc_var & 0xFFFF;

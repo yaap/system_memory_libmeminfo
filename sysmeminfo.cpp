@@ -475,7 +475,18 @@ bool ReadKernelCmaUsageKb(uint64_t* size, const std::string& cma_stats_sysfs_pat
     uint64_t totalKernelCmaUsageKb = 0;
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(cma_stats_sysfs_path.c_str()), closedir);
     if (!dir) {
-        LOG(ERROR) << "Failed to open CMA sysfs stats directory: " << cma_stats_sysfs_path;
+        static bool missingDirLogged = false;
+        // Kernels prior to 6.12 may not have this directory available, so log an error only once
+        // to avoid spamming the logs in that scenario.
+        //
+        // Log all other types of errors.
+        if (errno == ENOENT) {
+            if (missingDirLogged) {
+                return false;
+            }
+            missingDirLogged = true;
+        }
+        PLOG(ERROR) << "Failed to open CMA sysfs stats directory: " << cma_stats_sysfs_path;
         return false;
     }
 

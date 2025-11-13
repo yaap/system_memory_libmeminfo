@@ -55,6 +55,7 @@ enum {
     MEMINFO_VMALLOC_USED,
     MEMINFO_PAGE_TABLES,
     MEMINFO_KERNEL_STACK,
+    MEMINFO_SWAP_CACHED,
     MEMINFO_COUNT
 };
 
@@ -79,11 +80,11 @@ static void get_mem_info(uint64_t mem[], const char* file) {
     buffer[len] = 0;
 
     static const char* const tags[] = {
-            "MemTotal:",     "MemFree:",    "Buffers:",     "Cached:",   "Shmem:", "Slab:",
-            "SReclaimable:", "SUnreclaim:", "SwapTotal:",   "SwapFree:", "ZRam:",  "Mapped:",
-            "VmallocUsed:",  "PageTables:", "KernelStack:", NULL};
+            "MemTotal:",     "MemFree:",    "Buffers:",     "Cached:",     "Shmem:", "Slab:",
+            "SReclaimable:", "SUnreclaim:", "SwapTotal:",   "SwapFree:",   "ZRam:",  "Mapped:",
+            "VmallocUsed:",  "PageTables:", "KernelStack:", "SwapCached:", NULL};
 
-    static const int tagsLen[] = {9, 8, 8, 7, 6, 5, 13, 11, 10, 9, 5, 7, 12, 11, 12, 0};
+    static const int tagsLen[] = {9, 8, 8, 7, 6, 5, 13, 11, 10, 9, 5, 7, 12, 11, 12, 11, 0};
 
     memset(mem, 0, sizeof(uint64_t) * 15);
     char* p = buffer;
@@ -226,7 +227,7 @@ Hugepagesize:       2048 kB)meminfo";
             SysMemInfo::kMemCached,     SysMemInfo::kMemShmem,       SysMemInfo::kMemSlab,
             SysMemInfo::kMemSReclaim,   SysMemInfo::kMemSUnreclaim,  SysMemInfo::kMemSwapTotal,
             SysMemInfo::kMemSwapFree,   SysMemInfo::kMemMapped,      SysMemInfo::kMemVmallocUsed,
-            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack,
+            SysMemInfo::kMemPageTables, SysMemInfo::kMemKernelStack, SysMemInfo::kMemSwapCached,
     };
 
     SysMemInfo smi;
