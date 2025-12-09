@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2023 The Android Open Source Project
+// Copyright (C) 2025 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,34 +15,37 @@
 //
 
 package {
-    default_team: "trendy_team_android_kernel",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_test {
-    name: "elf_alignment_test",
-    require_root: true,
-    test_suites: [
-        "general-tests",
-        "vts",
-    ],
-
+cc_binary {
+    name: "gen_invalid_elf",
+    host_supported: true,
     srcs: [
-        "elf_alignment_test.cpp",
+        "gen_invalid_elf.cpp",
     ],
-
     static_libs: [
-        "libdm",
-        "libext2_uuid",
-        "libfs_mgr",
-        "libelf64",
-    ],
-
-    shared_libs: [
         "libbase",
+        "libelfutils",
         "liblog",
     ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+}
 
+cc_binary {
+    name: "compare_elfs",
+    host_supported: true,
+    srcs: [
+        "compare_elfs.cpp",
+    ],
+    static_libs: [
+        "libbase",
+        "libelfutils",
+        "liblog",
+    ],
     cflags: [
         "-Wall",
         "-Werror",

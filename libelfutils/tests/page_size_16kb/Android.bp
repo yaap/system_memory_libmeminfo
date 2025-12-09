@@ -15,60 +15,34 @@
 //
 
 package {
+    default_team: "trendy_team_android_kernel",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-cc_library {
-    name: "libelf64",
-    local_include_dirs: [
-        "include",
+cc_test {
+    name: "elf_alignment_test",
+    require_root: true,
+    test_suites: [
+        "general-tests",
+        "vts",
     ],
-    export_include_dirs: [
-        "include",
-    ],
-    srcs: [
-        "comparator.cpp",
-        "iter.cpp",
-        "parse.cpp",
-        "writer.cpp",
-    ],
-    shared_libs: [
-        "libbase",
-    ],
-    cflags: [
-        "-Wall",
-        "-Werror",
-    ],
-}
 
-cc_binary {
-    name: "gen_invalid_libs",
     srcs: [
-        "gen_invalid_libs.cpp",
+        "elf_alignment_test.cpp",
     ],
-    static_libs: [
-        "libelf64",
-    ],
-    shared_libs: [
-        "libbase",
-    ],
-    cflags: [
-        "-Wall",
-        "-Werror",
-    ],
-}
 
-cc_binary {
-    name: "compare_libs",
-    srcs: [
-        "compare_libs.cpp",
-    ],
     static_libs: [
-        "libelf64",
+        "libdm",
+        "libext2_uuid",
+        "libfs_mgr",
+        "libelfutils",
     ],
+
     shared_libs: [
         "libbase",
+        "liblog",
     ],
+
     cflags: [
         "-Wall",
         "-Werror",

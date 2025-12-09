@@ -133,6 +133,12 @@ class SysMemInfo final {
     }
 };
 
+// Parse a string like "1024", "128KB", "64MB", "1GB", "1GiB" into bytes.
+// Unit must be specified. KB, MB, GB are powers of 1000.
+// KiB, MiB, GiB are powers of 1024. Unit match is case insensitive.
+// Returns std::nullopt if the string is not a valid size.
+std::optional<uint64_t> ParseSizeToBytes(const std::string& str);
+
 // Parse /proc/vmallocinfo and return total physical memory mapped
 // in vmalloc area by the kernel. Note that this deliberately ignores binder buffers. They are
 // _always_ mapped in a process and are counted for in each process.

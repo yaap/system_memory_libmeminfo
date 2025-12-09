@@ -1,4 +1,5 @@
-// Copyright 2023 The Android Open Source Project
+//
+// Copyright (C) 2023 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,22 +12,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-libbpf_prog {
-    name: "bpfMemEvents.bpf",
-    srcs: ["bpfMemEvents.c"],
-    header_libs: [
-        "android_bpf_defs",
-        "libmemevents_headers",
-    ],
-    relative_install_path: "memevents",
+//
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-libbpf_prog {
-    name: "bpfMemEventsTest.bpf",
-    srcs: ["bpfMemEventsTest.c"],
-    header_libs: [
-        "android_bpf_defs",
-        "libmemevents_headers",
+cc_library {
+    name: "libelfutils",
+    host_supported: true,
+    local_include_dirs: [
+        "include",
     ],
-    relative_install_path: "memevents",
+    export_include_dirs: [
+        "include",
+    ],
+    srcs: [
+        "comparator.cpp",
+        "elf-file.cpp",
+        "iter.cpp",
+    ],
+    shared_libs: [
+        "libbase",
+    ],
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
 }

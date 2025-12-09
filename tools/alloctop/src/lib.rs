@@ -158,7 +158,7 @@ pub fn print_tree_data(data: &HashMap<String, (u64, u64)>, min_size: u64) {
         if *size < min_size {
             continue;
         }
-        println!("{:>10} {:>10} {}", size, calls, tag);
+        println!("{size:>10} {calls:>10} {tag}");
     }
 }
 
@@ -244,6 +244,6 @@ pub fn run(
             }
             Ok(())
         }
-        Err(e) => Err(format!("Error reading or parsing allocinfo: {}", e)),
+        Err(e) => Err(format!("Error reading or parsing allocinfo: {e}")),
     }
 }

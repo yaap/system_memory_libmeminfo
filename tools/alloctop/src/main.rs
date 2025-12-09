@@ -135,7 +135,7 @@ fn main() {
     }
 
     if let Err(e) = run(max_lines, sort_by, min_size, use_tree, alloctop::PROC_ALLOCINFO) {
-        eprintln!("{}", e);
+        eprintln!("{e}");
         process::exit(1);
     }
 }
