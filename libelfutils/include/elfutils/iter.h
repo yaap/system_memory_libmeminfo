@@ -30,7 +30,8 @@ class ElfIterator {
     /*
      * Returns the number of ELF files processed.
      */
-    static int forEachElfFromDir(const std::string& dir, const ElfCallback& callback);
+    static int forEachElfFromDir(const std::string& dir, const ElfCallback& callback,
+                                 bool unwrapZips = false);
 };
 
 }  // namespace elfutils

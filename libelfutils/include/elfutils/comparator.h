@@ -18,8 +18,6 @@
 
 #include <elfutils/elf-file.h>
 
-#include <elf.h>
-
 #include <memory>
 #include <vector>
 

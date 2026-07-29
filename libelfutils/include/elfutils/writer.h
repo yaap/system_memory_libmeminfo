@@ -24,8 +24,6 @@
 #include <string>
 #include <vector>
 
-#include <elf.h>
-
 namespace android {
 namespace elfutils {
 

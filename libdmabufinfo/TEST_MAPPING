@@ -3,5 +3,10 @@
     {
       "name": "dmabufinfo_test"
     }
+  ],
+  "kernel-presubmit": [
+    {
+      "name": "dmabuf_procfs_test"
+    }
   ]
 }

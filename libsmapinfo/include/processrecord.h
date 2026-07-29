@@ -36,7 +36,7 @@ class ProcessRecord final {
                   bool get_cmdline, bool get_oomadj, std::ostream& err);
 
     bool valid() const;
-    void CalculateSwap(const std::vector<uint16_t>& swap_offset_array,
+    void CalculateSwap(const std::vector<unsigned int>& swap_offset_array,
                        float zram_compression_ratio);
 
     // Getters

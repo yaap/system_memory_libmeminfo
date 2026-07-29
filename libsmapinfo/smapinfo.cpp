@@ -63,7 +63,8 @@ bool get_all_pids(std::set<pid_t>* pids) {
 
 namespace procrank {
 
-static bool count_swap_offsets(const ProcessRecord& proc, std::vector<uint16_t>& swap_offset_array,
+static bool count_swap_offsets(const ProcessRecord& proc,
+                               std::vector<unsigned int>& swap_offset_array,
                                std::ostream& err) {
     const std::vector<uint64_t>& swp_offs = proc.SwapOffsets();
     for (auto& off : swp_offs) {
@@ -71,7 +72,7 @@ static bool count_swap_offsets(const ProcessRecord& proc, std::vector<uint16_t>&
             err << "swap offset " << off << " is out of bounds for process: " << proc.pid() << "\n";
             return false;
         }
-        if (swap_offset_array[off] == USHRT_MAX) {
+        if (swap_offset_array[off] == UINT_MAX) {
             err << "swap offset " << off << " ref count overflow in process: " << proc.pid()
                 << "\n";
             return false;
@@ -139,8 +140,8 @@ static std::function<bool(ProcessRecord& a, ProcessRecord& b)> select_sort(struc
 }
 
 static bool populate_procs(struct params* params, uint64_t pgflags, uint64_t pgflags_mask,
-                           std::vector<uint16_t>& swap_offset_array, const std::set<pid_t>& pids,
-                           std::vector<ProcessRecord>* procs,
+                           std::vector<unsigned int>& swap_offset_array,
+                           const std::set<pid_t>& pids, std::vector<ProcessRecord>* procs,
                            std::map<pid_t, ProcessRecord>* processrecords_ptr, std::ostream& err) {
     // Fall back to using an empty map of ProcessRecords if nullptr was passed in.
     std::map<pid_t, ProcessRecord> processrecords;
@@ -300,7 +301,7 @@ static void print_sysmeminfo(struct params* params, const ::android::meminfo::Sy
 }
 
 static void add_to_totals(struct params* params, ProcessRecord& proc,
-                          const std::vector<uint16_t>& swap_offset_array) {
+                          const std::vector<unsigned int>& swap_offset_array) {
     params->total_pss += proc.Usage(params->show_wss).pss;
     params->total_uss += proc.Usage(params->show_wss).uss;
     if (!params->show_wss && params->swap_enabled) {
@@ -344,7 +345,7 @@ bool run_procrank(uint64_t pgflags, uint64_t pgflags_mask, const std::set<pid_t>
     uint64_t swap_total = smi.mem_swap_kb() * 1024;
     params.swap_enabled = swap_total > 0;
     // Allocate the swap array.
-    std::vector<uint16_t> swap_offset_array(swap_total / getpagesize() + 1, 0);
+    std::vector<unsigned int> swap_offset_array(swap_total / getpagesize() + 1, 0);
     if (params.swap_enabled) {
         params.zram_enabled = smi.mem_zram_kb() > 0;
         if (params.zram_enabled) {

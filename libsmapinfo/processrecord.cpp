@@ -106,7 +106,7 @@ bool ProcessRecord::valid() const {
     return pid_ != -1;
 }
 
-void ProcessRecord::CalculateSwap(const std::vector<uint16_t>& swap_offset_array,
+void ProcessRecord::CalculateSwap(const std::vector<unsigned int>& swap_offset_array,
                                   float zram_compression_ratio) {
     for (auto& off : swap_offsets_) {
         proportional_swap_ += getpagesize() / swap_offset_array[off];

@@ -15,22 +15,31 @@
  */
 
 #include <android-base/stringprintf.h>
+#include <set>
 
 #include "meminfo_private.h"
 
 namespace android {
 namespace meminfo {
 
-bool ExtractAndroidHeapStats(int pid, AndroidHeapStats* stats, bool* foundSwapPss) {
+bool ExtractAndroidHeapStats(int pid, AndroidHeapStats* stats, bool* foundSwapPss,
+                            AndroidBitmapStats* bitmap_stats) {
     std::string smaps_path = base::StringPrintf("/proc/%d/smaps", pid);
-    return ExtractAndroidHeapStatsFromFile(smaps_path, stats, foundSwapPss);
+    return ExtractAndroidHeapStatsFromFile(smaps_path, stats, foundSwapPss, bitmap_stats);
 }
 
 bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapStats* stats,
-                                     bool* foundSwapPss) {
+                                     bool* foundSwapPss, AndroidBitmapStats* bitmap_stats) {
     *foundSwapPss = false;
     uint64_t prev_end = 0;
     int prev_heap = HEAP_UNKNOWN;
+
+    if (bitmap_stats) {
+        memset(bitmap_stats, 0, sizeof(AndroidBitmapStats));
+    }
+    std::set<uint64_t> unique_bitmap_inodes;
+    // Actually, unique size is sum of sizes of unique inodes.
+    uint64_t unique_size_kb = 0;
 
     auto vma_scan = [&](const Vma& vma) {
         int which_heap = HEAP_UNKNOWN;
@@ -110,12 +119,17 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
             } else if (name.starts_with("/dev/ashmem")) {
                 which_heap = HEAP_ASHMEM;
             }
-        } else if (name.starts_with("/memfd:jit-cache")) {
-            which_heap = HEAP_DALVIK_OTHER;
-            sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
-        } else if (name.starts_with("/memfd:jit-zygote-cache")) {
-            which_heap = HEAP_DALVIK_OTHER;
-            sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
+        } else if (name.starts_with("/memfd:")) {
+            which_heap = HEAP_MEMFD;
+            if (name.starts_with("/memfd:jit-cache")) {
+              which_heap = HEAP_DALVIK_OTHER;
+              sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
+            } else if (name.starts_with("/memfd:jit-zygote-cache")) {
+              which_heap = HEAP_DALVIK_OTHER;
+              sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
+            } else if (name.starts_with("/memfd:CursorWindow")) {
+                which_heap = HEAP_CURSOR;
+            }
         } else if (name.starts_with("[anon:")) {
             which_heap = HEAP_UNKNOWN;
             if (name.starts_with("[anon:dalvik-")) {
@@ -167,10 +181,11 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
         if (is_swappable && (usage.pss > 0)) {
             float sharing_proportion = 0.0;
             if ((usage.shared_clean > 0) || (usage.shared_dirty > 0)) {
-                sharing_proportion =
-                        (usage.pss - usage.uss) / (usage.shared_clean + usage.shared_dirty);
+                sharing_proportion = static_cast<float>(usage.pss - usage.uss) /
+                                     (usage.shared_clean + usage.shared_dirty);
             }
-            swapable_pss = (sharing_proportion * usage.shared_clean) + usage.private_clean;
+            swapable_pss = static_cast<uint64_t>(sharing_proportion * usage.shared_clean) +
+                           usage.private_clean;
         }
 
         stats[which_heap].pss += usage.pss;
@@ -194,10 +209,27 @@ bool ExtractAndroidHeapStatsFromFile(const std::string& smaps_path, AndroidHeapS
             stats[sub_heap].swappedOut += usage.swap;
             stats[sub_heap].swappedOutPss += usage.swap_pss;
         }
+
+        if (bitmap_stats && (name.starts_with("bitmap/") ||
+                            name.starts_with("/dev/ashmem/bitmap/") ||
+                            name.starts_with("/memfd:bitmap/"))) {
+            bitmap_stats->total_count++;
+            bitmap_stats->total_size_kb += (vma.end - vma.start) / 1024;
+            if (unique_bitmap_inodes.find(vma.inode) == unique_bitmap_inodes.end()) {
+                unique_bitmap_inodes.insert(vma.inode);
+                unique_size_kb += (vma.end - vma.start) / 1024;
+            }
+        }
+
         return true;
     };
 
-    return ForEachVmaFromFile(smaps_path, vma_scan);
+    bool success = ForEachVmaFromFile(smaps_path, vma_scan);
+    if (success && bitmap_stats) {
+        bitmap_stats->unique_count = unique_bitmap_inodes.size();
+        bitmap_stats->unique_size_kb = unique_size_kb;
+    }
+    return success;
 }
 }  // namespace meminfo
 }  // namespace android

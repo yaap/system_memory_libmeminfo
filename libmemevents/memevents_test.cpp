@@ -71,7 +71,7 @@ static void initializeTestListener(std::unique_ptr<MemEventListener>& memevent_l
         /* This sleep is needed in order to allow for the BPF manager to
          * initialize without failure.
          */
-        sleep(1);
+        sleep(10);
         memevent_listener = std::make_unique<MemEventListener>(mem_test_client);
     }
     ASSERT_TRUE(memevent_listener->ok()) << "BPF ring buffer manager didn't initialize";

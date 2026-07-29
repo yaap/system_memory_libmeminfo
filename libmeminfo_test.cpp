@@ -37,6 +37,8 @@
 #include <android-base/properties.h>
 #include <android-base/stringprintf.h>
 
+#include "meminfo_private.h"
+
 using namespace std;
 using namespace android::meminfo;
 using android::vintf::KernelVersion;
@@ -46,6 +48,18 @@ using android::vintf::VintfObject;
 namespace fs = std::filesystem;
 
 pid_t pid = -1;
+
+TEST(PageAcct, PageFlags) {
+    uint64_t flags;
+    bool success = PageAcct::Instance().PageFlags(0, &flags);
+    if (getuid() == 0) {
+        ASSERT_TRUE(success);
+    } else {
+        // we should correctly fail if the test was executed as
+	// a non-root uid.
+        ASSERT_FALSE(success);
+    }
+}
 
 TEST(ProcMemInfo, TestWorkingTestReset) {
     // Expect reset to succeed
@@ -159,6 +173,23 @@ TEST(ProcMemInfo, MapsUsageFillInAll) {
     for (auto& map : maps) {
         // Check that at least one usage stat was updated.
         ASSERT_NE(0, map.usage.vss);
+    }
+}
+
+TEST(ProcMemInfo, MapsWithPageIdle) {
+    bool supported = PageAcct::KernelHasPageIdle();
+    ProcMemInfo proc_mem(pid, true);
+    const std::vector<Vma>& maps = proc_mem.MapsWithPageIdle();
+
+    if (supported) {
+        ASSERT_FALSE(maps.empty());
+        uint64_t total_vss = 0;
+        for (const auto& map : maps) {
+            total_vss += map.usage.vss;
+        }
+        ASSERT_NE(0, total_vss);
+    } else {
+        ASSERT_TRUE(maps.empty());
     }
 }
 
@@ -380,6 +411,17 @@ TEST(ProcMemInfo, StatusVmRSSBogusFileTest) {
 
     uint64_t rss;
     ASSERT_EQ(StatusVmRSSFromFile(path, &rss), false);
+}
+
+TEST(ProcMemInfo, ForEachVmaFromMapsTest) {
+    ProcMemInfo proc_mem(pid);
+    std::vector<Vma> vmas;
+    auto collect_vmas = [&](const Vma& v) {
+        vmas.push_back(v);
+        return true;
+    };
+    ASSERT_TRUE(proc_mem.ForEachVmaFromMaps(collect_vmas));
+    ASSERT_GT(vmas.size(), 0);
 }
 
 TEST(ProcMemInfo, ForEachExistingVmaTest) {
@@ -935,6 +977,7 @@ SReclaimable:      44432 kB
 SUnreclaim:        42032 kB
 KernelStack:        4880 kB
 PageTables:         2900 kB
+SecPageTables:        56 kB
 NFS_Unstable:          0 kB
 Bounce:                0 kB
 WritebackTmp:          0 kB
@@ -943,6 +986,7 @@ Committed_AS:      80296 kB
 VmallocTotal:   263061440 kB
 VmallocUsed:       65536 kB
 VmallocChunk:          0 kB
+Percpu:            18432 kB
 AnonHugePages:      6144 kB
 ShmemHugePages:        0 kB
 ShmemPmdMapped:        0 kB
@@ -986,6 +1030,8 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mi.mem_cma_total_kb(), 131072);
     EXPECT_EQ(mi.mem_cma_free_kb(), 130380);
     EXPECT_EQ(mi.mem_swap_cached_kb(), 29252);
+    EXPECT_EQ(mi.mem_sec_page_tables_kb(), 56);
+    EXPECT_EQ(mi.mem_percpu_kb(), 18432);
 }
 
 TEST(SysMemInfo, TestEmptyFile) {
@@ -997,6 +1043,13 @@ TEST(SysMemInfo, TestEmptyFile) {
     SysMemInfo mi;
     EXPECT_TRUE(mi.ReadMemInfo(tf.path));
     EXPECT_EQ(mi.mem_total_kb(), 0);
+}
+
+TEST(SysMemInfo, TestZramCompacted) {
+    std::string exec_dir = ::android::base::GetExecutableDirectory();
+    std::string zram_mmstat_dir = exec_dir + "/testdata1/";
+    SysMemInfo mi;
+    ASSERT_EQ(mi.mem_compacted_kb(zram_mmstat_dir.c_str()), 116086);
 }
 
 TEST(SysMemInfo, TestZramTotal) {
@@ -1038,6 +1091,8 @@ enum {
     MEMINFO_CMA_TOTAL,
     MEMINFO_CMA_FREE,
     MEMINFO_SWAP_CACHED,
+    MEMINFO_SEC_PAGE_TABLES,
+    MEMINFO_PERCPU,
     MEMINFO_COUNT
 };
 
@@ -1069,6 +1124,7 @@ SReclaimable:      44432 kB
 SUnreclaim:        42032 kB
 KernelStack:        4880 kB
 PageTables:         2900 kB
+SecPageTables:        56 kB
 NFS_Unstable:          0 kB
 Bounce:                0 kB
 WritebackTmp:          0 kB
@@ -1077,6 +1133,7 @@ Committed_AS:      80296 kB
 VmallocTotal:   263061440 kB
 VmallocUsed:       65536 kB
 VmallocChunk:          0 kB
+Percpu:            18432 kB
 AnonHugePages:      6144 kB
 ShmemHugePages:        0 kB
 ShmemPmdMapped:        0 kB
@@ -1128,6 +1185,8 @@ Hugepagesize:       2048 kB)meminfo";
     EXPECT_EQ(mem[MEMINFO_CMA_TOTAL], 131072);
     EXPECT_EQ(mem[MEMINFO_CMA_FREE], 130380);
     EXPECT_EQ(mem[MEMINFO_SWAP_CACHED], 29252);
+    EXPECT_EQ(mem[MEMINFO_SEC_PAGE_TABLES], 56);
+    EXPECT_EQ(mem[MEMINFO_PERCPU], 18432);
 }
 
 TEST(SysMemInfo, TestVmallocInfoNoMemory) {
@@ -1186,32 +1245,6 @@ TEST(SysMemInfo, TestVmallocInfoAll) {
     EXPECT_EQ(ReadVmallocInfo(file.c_str()), 7 * getpagesize());
 }
 
-TEST(SysMemInfo, TestReadIonHeapsSizeKb) {
-    std::string total_heaps_kb = R"total_heaps_kb(98480)total_heaps_kb";
-    uint64_t size;
-
-    TemporaryFile tf;
-    ASSERT_TRUE(tf.fd != -1);
-    ASSERT_TRUE(::android::base::WriteStringToFd(total_heaps_kb, tf.fd));
-    std::string file = std::string(tf.path);
-
-    ASSERT_TRUE(ReadIonHeapsSizeKb(&size, file));
-    EXPECT_EQ(size, 98480);
-}
-
-TEST(SysMemInfo, TestReadIonPoolsSizeKb) {
-    std::string total_pools_kb = R"total_pools_kb(416)total_pools_kb";
-    uint64_t size;
-
-    TemporaryFile tf;
-    ASSERT_TRUE(tf.fd != -1);
-    ASSERT_TRUE(::android::base::WriteStringToFd(total_pools_kb, tf.fd));
-    std::string file = std::string(tf.path);
-
-    ASSERT_TRUE(ReadIonPoolsSizeKb(&size, file));
-    EXPECT_EQ(size, 416);
-}
-
 TEST(SysMemInfo, TestReadGpuTotalUsageKb) {
     uint64_t size;
 
@@ -1263,6 +1296,21 @@ TEST_F(CmaSysfsStats, TestReadKernelCmaUsageKb) {
     uint64_t size;
     ASSERT_TRUE(ReadKernelCmaUsageKb(&size, cma_sysfs_stats_path));
     ASSERT_EQ(size, (4 * getpagesize()) / 1024);
+}
+
+TEST(AndroidProcHeaps, ExtractAndroidHeapStatsTest) {
+    AndroidHeapStats stats[_NUM_HEAP];
+    memset(stats, 0, sizeof(stats));
+    bool foundSwapPss;
+
+    ASSERT_TRUE(ExtractAndroidHeapStats(pid, stats, &foundSwapPss));
+
+    uint64_t total_pss = 0;
+    for (int i = 0; i < _NUM_CORE_HEAP; i++) {
+        total_pss += stats[i].pss;
+    }
+
+    ASSERT_GT(total_pss, 0);
 }
 
 TEST(AndroidProcHeaps, ExtractAndroidHeapStatsFromFileTest) {
@@ -1325,17 +1373,17 @@ class DmabufHeapStats : public ::testing::Test {
   public:
     virtual void SetUp() {
         fs::current_path(fs::temp_directory_path());
-        buffer_stats_path = fs::current_path() / "buffers";
-        ASSERT_TRUE(fs::create_directory(buffer_stats_path));
+        sysfs_buffer_stats_path = fs::current_path() / "buffers";
+        ASSERT_TRUE(fs::create_directory(sysfs_buffer_stats_path));
         heap_root_path = fs::current_path() / "dma_heap";
         ASSERT_TRUE(fs::create_directory(heap_root_path));
     }
     virtual void TearDown() {
-        fs::remove_all(buffer_stats_path);
+        fs::remove_all(sysfs_buffer_stats_path);
         fs::remove_all(heap_root_path);
     }
 
-    fs::path buffer_stats_path;
+    fs::path sysfs_buffer_stats_path;
     fs::path heap_root_path;
 };
 
@@ -1347,7 +1395,7 @@ TEST_F(DmabufHeapStats, TestDmabufHeapTotalExportedKb) {
     ASSERT_TRUE(android::base::WriteStringToFile("test", system_heap_path));
 
     for (unsigned int inode_number = 74831; inode_number < 74841; inode_number++) {
-        auto buffer_path = buffer_stats_path / StringPrintf("%u", inode_number);
+        auto buffer_path = sysfs_buffer_stats_path / StringPrintf("%u", inode_number);
         ASSERT_TRUE(fs::create_directories(buffer_path));
 
         auto buffer_size_path = buffer_path / "size";
@@ -1359,7 +1407,8 @@ TEST_F(DmabufHeapStats, TestDmabufHeapTotalExportedKb) {
         ASSERT_TRUE(android::base::WriteStringToFile(exp_name, exp_name_path));
     }
 
-    ASSERT_TRUE(ReadDmabufHeapTotalExportedKb(&size, heap_root_path, buffer_stats_path));
+    // This version of the API with path args is now test-only
+    ASSERT_TRUE(ReadDmabufHeapTotalExportedKb(&size, heap_root_path, sysfs_buffer_stats_path));
     ASSERT_EQ(size, 20);
 }
 
@@ -1374,6 +1423,66 @@ TEST(SysMemInfo, TestReadDmaBufHeapPoolsSizeKb) {
 
     ASSERT_TRUE(ReadDmabufHeapPoolsSizeKb(&size, file));
     EXPECT_EQ(size, 416);
+}
+
+TEST(SysMemInfo, TestReadSlabInfo) {
+    std::string slabinfo = R"slabinfo(slabinfo - version: 2.1
+# name            <active_objs> <num_objs> <objsize> <objperslab> <pagesperslab> : tunables <limit> <batchcount> <sharedfactor> : slabdata <active_slabs> <num_slabs> <sharedavail>
+kmalloc-64        439896 443904     64   64    1 : tunables    0    0    0 : slabdata   6936   6936      0
+kmalloc-192        43803  45045    192   21    1 : tunables    0    0    0 : slabdata   2145   2145      0
+kmalloc-128        60421  63328    128   32    1 : tunables    0    0    0 : slabdata   1979   1979      0
+)slabinfo";
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(slabinfo, tf.fd));
+    std::string file = std::string(tf.path);
+
+    int page_size = getpagesize();
+    std::unordered_map<std::string, SlabCacheStats> slab_cache_stats;
+    ASSERT_TRUE(ReadSlabInfo(&slab_cache_stats, file));
+    ASSERT_EQ(slab_cache_stats.size(), 3);
+    ASSERT_EQ(slab_cache_stats["kmalloc-64"].totalMemUsageKb, (page_size * 1 * 6936) / 1024);
+    ASSERT_EQ(slab_cache_stats["kmalloc-128"].totalMemUsageKb, (page_size * 1 * 1979) / 1024);
+    ASSERT_EQ(slab_cache_stats["kmalloc-192"].totalMemUsageKb, (page_size * 1 * 2145) / 1024);
+}
+
+TEST(SysMemInfo, TestReadSlabInfoBadVersion) {
+    std::string slabinfo = R"slabinfo(slabinfo - version: 2.2
+# name            <active_objs> <num_objs> <objsize> <objperslab> <pagesperslab> : tunables <limit> <batchcount> <sharedfactor> : slabdata <active_slabs> <num_slabs> <sharedavail>
+kmalloc-64        439896 443904     64   64    1 : tunables    0    0    0 : slabdata   6936   6936      0
+kmalloc-192        43803  45045    192   21    1 : tunables    0    0    0 : slabdata   2145   2145      0
+kmalloc-128        60421  63328    128   32    1 : tunables    0    0    0 : slabdata   1979   1979      0
+)slabinfo";
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(slabinfo, tf.fd));
+    std::string file = std::string(tf.path);
+
+    std::unordered_map<std::string, SlabCacheStats> slab_cache_stats;
+    ASSERT_FALSE(ReadSlabInfo(&slab_cache_stats, file));
+}
+
+TEST(SysMemInfo, TestReadSlabInfoDuplicateSlabs) {
+    std::string slabinfo = R"slabinfo(slabinfo - version: 2.1
+# name            <active_objs> <num_objs> <objsize> <objperslab> <pagesperslab> : tunables <limit> <batchcount> <sharedfactor> : slabdata <active_slabs> <num_slabs> <sharedavail>
+kmalloc-64        439896 443904     64   64    1 : tunables    0    0    0 : slabdata   6936   6936      0
+kmalloc-64         43803  45045    192   21    1 : tunables    0    0    0 : slabdata   2145   2145      0
+kmalloc-128        60421  63328    128   32    1 : tunables    0    0    0 : slabdata   1979   1979      0
+)slabinfo";
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(::android::base::WriteStringToFd(slabinfo, tf.fd));
+    std::string file = std::string(tf.path);
+
+    int page_size = getpagesize();
+    std::unordered_map<std::string, SlabCacheStats> slab_cache_stats;
+    ASSERT_TRUE(ReadSlabInfo(&slab_cache_stats, file));
+    ASSERT_EQ(slab_cache_stats.size(), 2);
+    ASSERT_EQ(slab_cache_stats["kmalloc-64"].totalMemUsageKb, (page_size * 1 * (6936 + 2145)) / 1024);
+    ASSERT_EQ(slab_cache_stats["kmalloc-128"].totalMemUsageKb, (page_size * 1 * 1979) / 1024);
 }
 
 TEST(ProcMemInfo, ParseSizeToBytes_Valid) {
@@ -1433,6 +1542,34 @@ TEST(ProcMemInfo, ParseSizeToBytes_Invalid) {
     EXPECT_EQ(std::nullopt, ParseSizeToBytes("+200MB"));
     EXPECT_EQ(std::nullopt, ParseSizeToBytes("200"));
     EXPECT_EQ(std::nullopt, ParseSizeToBytes("0200MB"));
+}
+
+TEST(AndroidProcessHeaps, TestExtractAndroidBitmapStats) {
+    std::string smaps =
+            "12c00000-12c64000 rw-s 00000000 00:01 123                /dev/ashmem/bitmap/allocate_0_100x100_size-40000_id-123 (deleted)\n"
+            "Size:                400 kB\n"
+            "Pss:                 400 kB\n"
+            "12c64000-12cc8000 rw-s 00000000 00:01 123                /dev/ashmem/bitmap/allocate_1_100x100_size-40000_id-123 (deleted)\n"
+            "Size:                400 kB\n"
+            "Pss:                 400 kB\n"
+            "12cc8000-12d2c000 rw-s 00000000 00:01 124                /dev/ashmem/bitmap/allocate_2_100x100_size-40000_id-456 (deleted)\n"
+            "Size:                400 kB\n"
+            "Pss:                 400 kB\n";
+
+    TemporaryFile tf;
+    ASSERT_TRUE(tf.fd != -1);
+    ASSERT_TRUE(android::base::WriteStringToFd(smaps, tf.fd));
+
+    AndroidHeapStats stats[_NUM_HEAP];
+    memset(&stats, 0, sizeof(stats));
+    bool foundSwapPss;
+    AndroidBitmapStats bitmap_stats;
+
+    ASSERT_TRUE(ExtractAndroidHeapStatsFromFile(tf.path, stats, &foundSwapPss, &bitmap_stats));
+    EXPECT_EQ(bitmap_stats.total_count, 3);
+    EXPECT_EQ(bitmap_stats.total_size_kb, 1200);
+    EXPECT_EQ(bitmap_stats.unique_count, 2);
+    EXPECT_EQ(bitmap_stats.unique_size_kb, 800);
 }
 
 int main(int argc, char** argv) {

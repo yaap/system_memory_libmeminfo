@@ -108,3 +108,10 @@ cc_benchmark {
         "testdata1/*",
     ],
 }
+
+cc_library_headers {
+    name: "libmeminfo_headers",
+    export_include_dirs: ["include"],
+    host_supported: true,
+    sdk_version: "current",
+}

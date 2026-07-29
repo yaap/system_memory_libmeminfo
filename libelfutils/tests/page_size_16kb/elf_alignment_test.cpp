@@ -21,17 +21,20 @@
 #include <regex>
 #include <set>
 
-#include <elfutils/iter.h>
-#include <libdm/dm.h>
-
 #include <android-base/properties.h>
 #include <android-base/strings.h>
 #include <android/api-level.h>
+#include <elfpolicy/elf_policy.h>
+#include <elfutils/iter.h>
+#include <libdm/dm.h>
+
+using ::android::elfutils::Elf64_File;
 
 constexpr char kLowRamProp[] = "ro.config.low_ram";
 constexpr char kVendorApiLevelProp[] = "ro.vendor.api_level";
-// 16KB by default (unsupported devices must explicitly opt-out)
-constexpr size_t kRequiredMaxSupportedPageSize = 0x4000;
+
+// Unsupported devices must explicitly opt-out
+constexpr uint64_t kRequiredMaxSupportedPageSize = ::android::elfpolicy::kMaxSupportedPageSize;
 
 static inline std::string escapeForRegex(const std::string& str) {
     // Regex metacharacters to be escaped
@@ -74,6 +77,22 @@ static std::set<std::string> getMounts() {
 
 using ::android::elfutils::ElfFile;
 
+static bool isSystemPartition(const std::string& path) {
+    static std::vector<std::string> system_partitions = {"/system", "/system_ext", "/product"};
+
+    for (const auto& prefix : system_partitions) {
+        if (android::base::StartsWith(path, prefix + "/")) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool isVendorPartition(const std::string path) {
+    return !isSystemPartition(path);
+}
+
 class ElfAlignmentTest : public ::testing::TestWithParam<std::string> {
   protected:
     static void loadAlignmentCb(ElfFile& elfFile) {
@@ -91,10 +110,15 @@ class ElfAlignmentTest : public ::testing::TestWithParam<std::string> {
                 escapeForRegex("/odm/firmware/"), escapeForRegex("/vendor/firmware/"),
                 escapeForRegex("/vendor/firmware_mnt/image"),
                 // Ignore TEE binaries ("glob: /apex/com.*.android.authfw.ta*")
-                escapeForRegex("/apex/com.") + ".*" + escapeForRegex(".android.authfw.ta")};
+                escapeForRegex("/apex/com.") + ".*" + escapeForRegex(".android.authfw.ta"),
+                // Ignore wlan debug vendor prebuilts
+                escapeForRegex("/vendor/bin/dhd"),
+                escapeForRegex("/vendor/bin/wl")};
 
-        // Don't check 32-bit ELFs
-        if (elfFile.is32Bit()) return;
+        // Don't check 32-bit ELFs, as 16k alignment is only required for 64-bit processes.
+        if (elfFile.is32Bit()) {
+            return;
+        }
 
         std::string path = elfFile.getPath();
         for (const auto& pattern : ignored_directories) {
@@ -109,10 +133,26 @@ class ElfAlignmentTest : public ::testing::TestWithParam<std::string> {
             return;
         }
 
-        if (auto minAlign = elfFile.getMinLoadSegmentAlignment()) {
-            EXPECT_GE(*minAlign, kRequiredMaxSupportedPageSize)
-                    << " " << path << " is not at least 16KiB aligned";
+        std::string errorMsg;
+        EXPECT_TRUE(android::elfpolicy::VerifyLoadSegmentsAlignment(
+                elfFile, kRequiredMaxSupportedPageSize, errorMsg))
+                << "File " << path << " failed 16k compatibility check: " << errorMsg;
+
+        // Older toolchains have a bug in both GNU ld and LLVM lld which causes
+        // the RELRO's end alignment to not respect the specified max-page-size.
+        // See: https://developer.android.com/guide/practices/page-sizes#compile-r22-lower
+        //
+        // However since vendors are allowed to upgrade Android versions without
+        // updating vendor partitions due to GRF; only enfore this on /vendor/
+        // starting from chipset version 202604 -- where it is implicitly required
+        // in order to implement [GMS-VSR-3.14.1-004] and [GMS-VSR-3.14.1-005]
+        if (vendorApiLevel() < 202604 && isVendorPartition(path)) {
+            return;
         }
+
+        EXPECT_TRUE(android::elfpolicy::VerifyRelroSegments(elfFile, kRequiredMaxSupportedPageSize,
+                                                            errorMsg))
+                << "File " << path << " failed RELRO segment check: " << errorMsg;
     };
 
     static bool isLowRamDevice() { return android::base::GetBoolProperty(kLowRamProp, false); }

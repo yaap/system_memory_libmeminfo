@@ -13,25 +13,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+#include <android-base/logging.h>
+#include <archivestager/archive_stager.h>
 #include <elfutils/elf-file.h>
 #include <elfutils/iter.h>
 #include <elfutils/parse.h>
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace android {
 namespace elfutils {
 
-int ElfIterator::forEachElfFromDir(const std::string& dir, const ElfCallback& callback) {
+int ElfIterator::forEachElfFromDir(const std::string& dir, const ElfCallback& callback,
+                                   bool unwrapZips) {
     int nrParsed = 0;
 
-    for (const std::filesystem::directory_entry& dirEntry :
-         std::filesystem::recursive_directory_iterator(dir)) {
+    for (const fs::directory_entry& dirEntry : fs::recursive_directory_iterator(dir)) {
         if (dirEntry.is_symlink() || !dirEntry.is_regular_file()) continue;
 
-        std::string file = dirEntry.path();
+        const fs::path file = dirEntry.path();
 
-        std::unique_ptr<ElfFile> elfFile = ElfFile::create(file);
+        if (unwrapZips) {
+            // Unwrap APKs and ZIPs.
+            std::string fileExtension = file.extension().string();
+            std::transform(fileExtension.begin(), fileExtension.end(), fileExtension.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            if (fileExtension == ".apk" || fileExtension == ".zip") {
+                fs::path stagedEntriesRootDir = "";
+                bool allPassed = stageArchiveContents(file, stagedEntriesRootDir);
+                if (allPassed) {
+                    nrParsed +=
+                            forEachElfFromDir(stagedEntriesRootDir.string(), callback, unwrapZips);
+                }
+                if (!stagedEntriesRootDir.empty()) {
+                    std::error_code ec;
+                    fs::remove_all(stagedEntriesRootDir, ec);
+                }
+                continue;
+            }
+        }
+
+        std::unique_ptr<ElfFile> elfFile = ElfFile::create(file.string());
         if (!elfFile) continue;
 
         nrParsed++;

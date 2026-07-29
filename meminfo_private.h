@@ -37,3 +37,12 @@
 
 // Macros to do per-page kpageflags data manipulation
 #define KPAGEFLAG_THP(x) (_BITS(x, 22, 1))
+
+namespace android {
+namespace meminfo {
+
+bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_root_path,
+                                   const std::string& dmabuf_sysfs_stats_path);
+
+}  // namespace meminfo
+}  // namespace android

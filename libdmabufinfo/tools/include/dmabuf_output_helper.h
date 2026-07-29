@@ -23,7 +23,7 @@
 #include <map>
 #include <string>
 
-#include <dmabufinfo/dmabuf_sysfs_stats.h>
+#include <dmabufinfo/dmabuf_per_buffer_stats.h>
 #include <dmabufinfo/dmabufinfo.h>
 
 class DmabufOutputHelper {
@@ -57,7 +57,7 @@ class DmabufOutputHelper {
     virtual void ExporterStats(const std::string& exporter,
                                const android::dmabufinfo::DmabufTotal& dmaBufTotal) = 0;
 
-    virtual void SysfsBufTotalStats(const android::dmabufinfo::DmabufSysfsStats& stats) = 0;
+    virtual void PerBufTotalStats(const android::dmabufinfo::DmabufPerBufferStats& stats) = 0;
 };
 
 class CsvOutput final : public DmabufOutputHelper {
@@ -146,7 +146,7 @@ class CsvOutput final : public DmabufOutputHelper {
                dmaBufTotal.size);
     }
 
-    void SysfsBufTotalStats(const android::dmabufinfo::DmabufSysfsStats& stats) override {
+    void PerBufTotalStats(const android::dmabufinfo::DmabufPerBufferStats& stats) override {
         printf("\"%s\",\"%s\"\n", "Total DMA-BUF count", "Total DMA-BUF size(bytes)");
         printf("%u,%" PRIu64 "\n", stats.total_count(), stats.total_size());
     }
@@ -227,7 +227,7 @@ class RawOutput final : public DmabufOutputHelper {
                dmaBufTotal.size);
     }
 
-    void SysfsBufTotalStats(const android::dmabufinfo::DmabufSysfsStats& stats) override {
+    void PerBufTotalStats(const android::dmabufinfo::DmabufPerBufferStats& stats) override {
         printf("Total DMA-BUF count: %u, Total DMA-BUF size(bytes): %" PRIu64 "\n",
                stats.total_count(), stats.total_size());
     }

@@ -42,14 +42,19 @@
 #include <android-base/file.h>
 #include <android-base/logging.h>
 #include <android-base/parseint.h>
+#include <android-base/strings.h>
 #include <android-base/stringprintf.h>
 #include <android-base/unique_fd.h>
-#include <dmabufinfo/dmabuf_sysfs_stats.h>
+#include <dmabufinfo/dmabuf_per_buffer_stats.h>
 
 #include "meminfo_private.h"
+#include "libdmabufinfo/dmabuf_sysfs_stats.h"
 
 namespace android {
 namespace meminfo {
+
+using DmabufTotal = dmabufinfo::DmabufTotal;
+using ExporterName = dmabufinfo::DmabufPerBufferStats::ExporterName;
 
 bool SysMemInfo::ReadMemInfo(const char* path) {
     return ReadMemInfo(path, SysMemInfo::kDefaultSysMemInfoTags.size(),
@@ -312,49 +317,36 @@ static bool ReadSysfsFile(const std::string& path, uint64_t* value) {
     return true;
 }
 
-bool ReadIonHeapsSizeKb(uint64_t* size, const std::string& path) {
-    return ReadSysfsFile(path, size);
+[[deprecated("Retained for binary compatibility for GRF")]]
+bool ReadIonHeapsSizeKb(uint64_t*, const std::string&) {
+    return false;
 }
 
-bool ReadIonPoolsSizeKb(uint64_t* size, const std::string& path) {
-    return ReadSysfsFile(path, size);
+[[deprecated("Retained for binary compatibility for GRF")]]
+bool ReadIonPoolsSizeKb(uint64_t*, const std::string&) {
+    return false;
 }
 
 bool ReadDmabufHeapPoolsSizeKb(uint64_t* size, const std::string& dma_heap_pool_size_path) {
     static bool support_dmabuf_heap_pool_size = [dma_heap_pool_size_path]() -> bool {
         bool ret = (access(dma_heap_pool_size_path.c_str(), R_OK) == 0);
-        if (!ret)
-            LOG(ERROR) << "Unable to read DMA-BUF heap total pool size, read ION total pool "
-                          "size instead.";
+        if (!ret) LOG(ERROR) << "Unable to read DMA-BUF heap total pool size";
         return ret;
     }();
 
-    if (!support_dmabuf_heap_pool_size) return ReadIonPoolsSizeKb(size);
+    if (!support_dmabuf_heap_pool_size) return false;
 
     return ReadSysfsFile(dma_heap_pool_size_path, size);
 }
 
-bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_root_path,
-                                   const std::string& dmabuf_sysfs_stats_path) {
-    static bool support_dmabuf_heaps = [dma_heap_root_path]() -> bool {
-        int access_ret = access(dma_heap_root_path.c_str(), R_OK);
-        bool ret = (access_ret == 0);
-        if (!ret) {
-            LOG(ERROR) << "DMA-BUF heaps not supported, read ION heap total instead. access() "
-                       << "returned " << access_ret << ", errno: " << strerror(errno);
-        }
-        return ret;
-    }();
-
-    if (!support_dmabuf_heaps) return ReadIonHeapsSizeKb(size);
-
+static std::unordered_set<ExporterName> GetDmabufHeapNames(const std::string& dma_heap_root_path) {
     std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir(dma_heap_root_path.c_str()), closedir);
 
     if (!dir) {
-        return false;
+        return {};
     }
 
-    std::unordered_set<std::string> heap_list;
+    std::unordered_set<ExporterName> heap_list;
     struct dirent* dent;
     while ((dent = readdir(dir.get()))) {
         if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) continue;
@@ -362,20 +354,59 @@ bool ReadDmabufHeapTotalExportedKb(uint64_t* size, const std::string& dma_heap_r
         heap_list.insert(dent->d_name);
     }
 
-    if (heap_list.empty()) return false;
+    return heap_list;
+}
 
-    android::dmabufinfo::DmabufSysfsStats stats;
-    if (!android::dmabufinfo::GetDmabufSysfsStats(&stats, dmabuf_sysfs_stats_path)) return false;
-
-    auto exporter_info = stats.exporter_info();
-
-    *size = 0;
+static uint64_t AccumulateHeapTotals(const std::unordered_set<ExporterName>& heap_list,
+        const std::unordered_map<ExporterName, DmabufTotal>& exporter_info) {
+    uint64_t size = 0;
     for (const auto& heap : heap_list) {
         auto iter = exporter_info.find(heap);
-        if (iter != exporter_info.end()) *size += iter->second.size;
+        if (iter != exporter_info.end()) size += iter->second.size;
     }
 
-    *size = *size / 1024;
+    size /= 1024; // KiB
+
+    return size;
+}
+
+bool ReadDmabufHeapTotalExportedKb(uint64_t* size) {
+    constexpr const char DMABUF_HEAP_ROOT_PATH[] = "/dev/dma_heap";
+    static bool support_dmabuf_heaps = [DMABUF_HEAP_ROOT_PATH]() -> bool {
+        int access_ret = access(DMABUF_HEAP_ROOT_PATH, R_OK);
+        bool ret = (access_ret == 0);
+        if (!ret) {
+            LOG(ERROR) << "DMA-BUF heaps not supported. access() returned " << access_ret
+                       << ", errno: " << strerror(errno);
+        }
+        return ret;
+    }();
+
+    if (!support_dmabuf_heaps) return false;
+
+    std::unordered_set<ExporterName> heap_list = GetDmabufHeapNames(DMABUF_HEAP_ROOT_PATH);
+    if (heap_list.empty()) return false;
+
+    android::dmabufinfo::DmabufPerBufferStats stats;
+    if (!android::dmabufinfo::GetDmabufPerBufferStats(stats)) return false;
+
+    *size = AccumulateHeapTotals(heap_list, stats.exporter_info());
+
+    return true;
+}
+
+[[deprecated("Retained for binary compatibility for GRF and for libmeminfo_test")]]
+bool ReadDmabufHeapTotalExportedKb(
+        uint64_t* size, const std::string& dma_heap_root_path,
+        const std::string& dmabuf_sysfs_stats_path) {
+
+    std::unordered_set<ExporterName> heap_list = GetDmabufHeapNames(dma_heap_root_path);
+    if (heap_list.empty()) return false;
+
+    android::dmabufinfo::DmabufPerBufferStats stats;
+    if (!android::dmabufinfo::GetDmabufSysfsStats(stats, dmabuf_sysfs_stats_path)) return false;
+
+    *size = AccumulateHeapTotals(heap_list, stats.exporter_info());
 
     return true;
 }
@@ -568,6 +599,121 @@ std::optional<uint64_t> ParseSizeToBytes(const std::string& str) {
     }
 
     return std::nullopt;
+}
+
+static bool getSlabCacheTotalMemUsage(const std::string& name,
+                                      const std::vector<std::string>& slabCells, int32_t* out) {
+    const int kPageSize = getpagesize();
+    const unsigned int kPagesPerSlabIdx = 5;
+    const unsigned int kNumSlabsIdx = 14;
+
+    unsigned long pagesPerSlab = strtoul(slabCells[kPagesPerSlabIdx].c_str(), nullptr, 10);
+    if (pagesPerSlab == ULONG_MAX) {
+        PLOG(ERROR) << "Failed to parse pages per slab cell for slab cache: " << name;
+        return false;
+    }
+
+    unsigned long numSlabs = strtoul(slabCells[kNumSlabsIdx].c_str(), nullptr, 10);
+    if (numSlabs == ULONG_MAX) {
+        PLOG(ERROR) << "Failed to parse number of slabs for slab cache: " << name;
+        return false;
+    }
+
+    *out = (kPageSize * pagesPerSlab * numSlabs) / 1024;
+    return true;
+}
+
+static bool validateSlabInfoVersion(const std::unique_ptr<FILE, decltype(&fclose)>& fp) {
+    char* versionLine = nullptr;
+    size_t size = 0;
+
+    if (getline(&versionLine, &size, fp.get()) < 0) {
+        PLOG(ERROR) << "Failed to read slabinfo header";
+        return false;
+    }
+
+    const unsigned int kSupportedMajorVersion = 2;
+    const unsigned int kSupportedMinorVersion = 1;
+    unsigned int majorVersion, minorVersion;
+    bool ret = true;
+
+    if (sscanf(versionLine, "slabinfo - version: %d.%d", &majorVersion, &minorVersion) != 2) {
+        LOG(ERROR) << "Failed to parse slabinfo header";
+        ret = false;
+        goto out;
+    }
+
+    // We only support slabinfo - version 2.1 at the moment.
+    if (!((majorVersion == kSupportedMajorVersion) && (minorVersion == kSupportedMinorVersion))) {
+        LOG(ERROR) << "Current slabinfo version: " << majorVersion << "." << minorVersion
+                   << " is not supported";
+        ret = false;
+        goto out;
+    }
+
+    ret = true;
+out:
+    free(versionLine);
+    return ret;
+}
+
+bool ReadSlabInfo(std::unordered_map<std::string, SlabCacheStats>* out,
+                  const std::string& slabInfoPath) {
+    if (out == nullptr) {
+        LOG(ERROR) << "ReadSlabInfo out parameter is NULL";
+        return false;
+    }
+    out->clear();
+
+    auto slabInfoFp = std::unique_ptr<FILE, decltype(&fclose)>{fopen(slabInfoPath.c_str(), "re"),
+                                                               fclose};
+    if (slabInfoFp == nullptr) {
+        PLOG(ERROR) << "Failed to read slabinfo file: " << slabInfoPath;
+        return false;
+    }
+
+    if (!validateSlabInfoVersion(slabInfoFp)) {
+        return false;
+    }
+
+    char* line = nullptr;
+    size_t size = 0;
+    // Discard second line, since it's not useful.
+    if (getline(&line, &size, slabInfoFp.get()) < 0) {
+        return false;
+    }
+
+    const unsigned int kSlabInfoNrCells = 16;
+    const unsigned int kSlabCacheNameIdx = 0;
+    bool ret = true;
+    while(getline(&line, &size, slabInfoFp.get()) > 0) {
+        std::vector<std::string> cells = ::android::base::Tokenize(std::string(line), " ");
+        if (cells.size() != kSlabInfoNrCells) {
+            LOG(ERROR) << "Number of entries per-row: " << cells.size() << " does not match "
+                       << "expected number of entries: " << kSlabInfoNrCells;
+            ret = false;
+            break;
+        }
+
+        std::string name = cells[kSlabCacheNameIdx];
+        SlabCacheStats stats;
+        if (!getSlabCacheTotalMemUsage(name, cells, &stats.totalMemUsageKb)) {
+            ret = false;
+            break;
+        }
+
+        const auto& iter = out->find(name);
+        if (iter == out->end()) {
+            out->insert({name, stats});
+        } else {
+            // Linux kernel commit 4c39529663b93 ("slab: Warn on duplicate cache names when
+            // DEBUG_VM=y) admits that this is a possible scenario. For now, we'll just clump
+            // slab caches with duplicate names together.
+            iter->second.totalMemUsageKb += stats.totalMemUsageKb;
+        }
+    }
+    free(line);
+    return ret;
 }
 
 }  // namespace meminfo

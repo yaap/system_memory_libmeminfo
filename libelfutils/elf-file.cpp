@@ -17,8 +17,6 @@
 #include <elfutils/elf-file.h>
 #include <elfutils/parse.h>
 
-#include <elf.h>
-
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -30,8 +28,8 @@
 namespace android {
 namespace elfutils {
 
-std::unique_ptr<ElfFile> ElfFile::create(const std::string& path) {
-    std::ifstream elfStream(path);
+std::unique_ptr<ElfFile> ElfFile::createFromIdent(const std::string& path) {
+    std::ifstream elfStream(path, std::ios::binary);
     if (!elfStream) {
         return {};
     }
@@ -53,26 +51,33 @@ std::unique_ptr<ElfFile> ElfFile::create(const std::string& path) {
     // Check for 32/64 bit.
     char classNum = elfIdent[EI_CLASS];
     if (classNum == ELFCLASS32) {
-        auto elfFile = std::make_unique<Elf32_File>(path);
-
-        ElfParser<Elf32_File> parser(*elfFile);
-        if (!parser.parse()) {
-            return {};
-        }
-
-        return elfFile;
+        return std::make_unique<Elf32_File>(path);
     } else if (classNum == ELFCLASS64) {
-        auto elfFile = std::make_unique<Elf64_File>(path);
-
-        ElfParser<Elf64_File> parser(*elfFile);
-        if (!parser.parse()) {
-            return {};
-        }
-
-        return elfFile;
+        return std::make_unique<Elf64_File>(path);
     }
 
     return {};
+}
+
+std::unique_ptr<ElfFile> ElfFile::create(const std::string& path) {
+    auto elfFile = createFromIdent(path);
+    if (!elfFile) {
+        return {};
+    }
+
+    if (elfFile->is32Bit()) {
+        ElfParser<Elf32_File> parser(*static_cast<Elf32_File*>(elfFile.get()));
+        if (!parser.parse()) {
+            return {};
+        }
+    } else {
+        ElfParser<Elf64_File> parser(*static_cast<Elf64_File*>(elfFile.get()));
+        if (!parser.parse()) {
+            return {};
+        }
+    }
+
+    return elfFile;
 }
 
 template <typename Ehdr_t, typename Phdr_t, typename Shdr_t, typename Dyn_t>
@@ -113,11 +118,24 @@ bool ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>::setDynamicEntries(
     return false;
 }
 
+template <typename Ehdr_t, typename Phdr_t, typename Shdr_t, typename Dyn_t>
+bool ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>::parseProgramHeaders() {
+    ElfParser<ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>> parser(*this);
+    return parser.parseExecutableHeader() && parser.parseProgramHeaders();
+}
+
+template <typename Ehdr_t, typename Phdr_t, typename Shdr_t, typename Dyn_t>
+bool ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>::parseSections() {
+    ElfParser<ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>> parser(*this);
+    return parser.parseExecutableHeader() && parser.parseSectionHeaders() && parser.parseSections();
+}
+
 /*
  * Returns the minimum of all PT_LOAD segments' p_align.
  */
 template <typename Ehdr_t, typename Phdr_t, typename Shdr_t, typename Dyn_t>
-std::optional<int64_t> ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>::getMinLoadSegmentAlignment() {
+std::optional<int64_t> ElfFileImpl<Ehdr_t, Phdr_t, Shdr_t, Dyn_t>::getMinLoadSegmentAlignment()
+        const {
     std::optional<int64_t> minAlign;
 
     for (const auto& phdr : mPhdrs) {

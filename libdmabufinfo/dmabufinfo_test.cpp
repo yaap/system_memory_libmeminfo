@@ -18,7 +18,6 @@
 #include <linux/dma-buf.h>
 #include <poll.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <sys/types.h>
 
 #include <filesystem>
@@ -32,32 +31,16 @@
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <android-base/unique_fd.h>
-#include <ion/ion.h>
 #include <unistd.h>
 
-#include <dmabufinfo/dmabuf_sysfs_stats.h>
+#include "dmabuf_bpf_stats.h"
+#include "dmabuf_sysfs_stats.h"
 #include <dmabufinfo/dmabufinfo.h>
 
 using namespace ::android::dmabufinfo;
 using namespace ::android::base;
 
 namespace fs = std::filesystem;
-
-#define MAX_HEAP_NAME 32
-#define ION_HEAP_ANY_MASK (0x7fffffff)
-
-struct ion_heap_data {
-    char name[MAX_HEAP_NAME];
-    __u32 type;
-    __u32 heap_id;
-    __u32 reserved0;
-    __u32 reserved1;
-    __u32 reserved2;
-};
-
-#ifndef DMA_BUF_SET_NAME
-#define DMA_BUF_SET_NAME _IOW(DMA_BUF_BASE, 5, const char*)
-#endif
 
 class fd_sharer {
   public:
@@ -220,8 +203,8 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
         ASSERT_TRUE(android::base::WriteStringToFile(exp_name, exp_name_path));
     }
 
-    DmabufSysfsStats stats;
-    ASSERT_TRUE(GetDmabufSysfsStats(&stats, buffer_stats_path.c_str()));
+    DmabufPerBufferStats stats;
+    ASSERT_TRUE(GetDmabufSysfsStats(stats, buffer_stats_path.c_str()));
 
     auto buffer_stats = stats.buffer_stats();
     ASSERT_EQ(buffer_stats.size(), 10UL);
@@ -243,10 +226,6 @@ TEST_F(DmaBufSysfsStatsParser, TestReadDmaBufSysfsStats) {
 
     auto total_count = stats.total_count();
     EXPECT_EQ(total_count, 10UL);
-
-    uint64_t total_exported;
-    EXPECT_TRUE(GetDmabufTotalExportedKb(&total_exported, buffer_stats_path.c_str()));
-    EXPECT_EQ(total_exported, 40UL);
 }
 
 class DmaBufProcessStatsTest : public ::testing::Test {
@@ -278,17 +257,13 @@ class DmaBufProcessStatsTest : public ::testing::Test {
         ASSERT_TRUE(android::base::WriteStringToFile(fdinfo, fdinfo_file_path));
     }
 
-    void AddSysfsDmaBufStats(unsigned int inode, unsigned int size, unsigned int mmap_count) {
+    void AddSysfsDmaBufStats(unsigned int inode, unsigned int size) {
         auto buffer_path = dmabuf_sysfs_path / android::base::StringPrintf("%u", inode);
         ASSERT_TRUE(fs::create_directory(buffer_path));
 
         auto size_path = buffer_path / "size";
         ASSERT_TRUE(android::base::WriteStringToFile(android::base::StringPrintf("%u", size),
                                                      size_path));
-
-        auto mmap_count_path = buffer_path / "mmap_count";
-        ASSERT_TRUE(android::base::WriteStringToFile(
-                android::base::StringPrintf("%u", mmap_count), mmap_count_path));
 
         auto exporter_path = buffer_path / "exporter_name";
         ASSERT_TRUE(android::base::WriteStringToFile(exporter, exporter_path));
@@ -324,11 +299,14 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufInfo) {
     map_entries.emplace_back(CreateMapEntry(4, 1024, true));  // Dmabuf 2
     AddMapEntries(map_entries);
 
-    AddSysfsDmaBufStats(2, 2048, 4);  // Dmabuf 1
-    AddSysfsDmaBufStats(4, 1024, 1);  // Dmabuf 2
+    AddSysfsDmaBufStats(2, 2048);  // Dmabuf 1
+    AddSysfsDmaBufStats(4, 1024);  // Dmabuf 2
+
+    android::dmabufinfo::DmabufPerBufferStats stats;
+    ASSERT_TRUE(GetDmabufSysfsStats(stats, dmabuf_sysfs_path));
 
     std::vector<DmaBuffer> dmabufs;
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs, true, procfs_path, dmabuf_sysfs_path));
+    ASSERT_TRUE(ReadDmaBufInfo(pid, dmabufs, stats, true, procfs_path));
 
     ASSERT_EQ(dmabufs.size(), 2u);
 
@@ -358,7 +336,7 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufFdRefs) {
     AddFdInfo(3, 1024, true);  // Dmabuf 2
 
     std::vector<DmaBuffer> dmabufs;
-    ASSERT_TRUE(ReadDmaBufFdRefs(pid, &dmabufs, procfs_path));
+    ASSERT_TRUE(ReadDmaBufFdRefs(pid, dmabufs, procfs_path));
     ASSERT_EQ(dmabufs.size(), 2u);
 
     const auto& dmabuf1 = std::find_if(dmabufs.begin(), dmabufs.end(),
@@ -401,11 +379,14 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufMapRefs) {
     map_entries.emplace_back(CreateMapEntry(3, 2048, true));  // Dmabuf 2
     AddMapEntries(map_entries);
 
-    AddSysfsDmaBufStats(2, 1024, 2);  // Dmabuf 1
-    AddSysfsDmaBufStats(3, 2048, 1);  // Dmabuf 2
+    AddSysfsDmaBufStats(2, 1024);  // Dmabuf 1
+    AddSysfsDmaBufStats(3, 2048);  // Dmabuf 2
+
+    android::dmabufinfo::DmabufPerBufferStats stats;
+    ASSERT_TRUE(GetDmabufSysfsStats(stats, dmabuf_sysfs_path));
 
     std::vector<DmaBuffer> dmabufs;
-    ASSERT_TRUE(ReadDmaBufMapRefs(pid, &dmabufs, procfs_path, dmabuf_sysfs_path));
+    ASSERT_TRUE(ReadDmaBufMapRefs(pid, dmabufs, stats, procfs_path));
     ASSERT_EQ(dmabufs.size(), 2u);
 
     const auto& dmabuf1 = std::find_if(dmabufs.begin(), dmabufs.end(),
@@ -440,294 +421,7 @@ TEST_F(DmaBufProcessStatsTest, TestReadDmaBufMapRefs) {
     ASSERT_EQ(pid_maprefs2->second, 1);
 }
 
-class DmaBufTester : public ::testing::Test {
-  public:
-    DmaBufTester() : ion_fd(ion_open()), ion_heap_mask(get_ion_heap_mask()) {}
-
-    ~DmaBufTester() {
-        if (ion_fd >= 0) {
-            ion_close(ion_fd);
-        }
-    }
-
-    bool is_valid() { return (ion_fd >= 0 && ion_heap_mask > 0); }
-
-    bool is_using_dmabuf_heaps() {
-        // We can verify that a device is running on dmabuf-heaps by checking that
-        // the `dev/ion` is missing, while `dev/dma_heap` is present.
-        // https://source.android.com/docs/core/architecture/kernel/dma-buf-heaps
-        return !fs::is_directory("/dev/ion") && fs::is_directory("/dev/dma_heap");
-    }
-
-    unique_fd allocate(uint64_t size, const std::string& name) {
-        int fd;
-        int err = ion_alloc_fd(ion_fd, size, 0, ion_heap_mask, 0, &fd);
-        if (err < 0) {
-            printf("Failed ion_alloc_fd, return value: %d\n", err);
-            return unique_fd{};
-        }
-
-        if (!name.empty()) {
-            if (ioctl(fd, DMA_BUF_SET_NAME, name.c_str()) == -1) {
-                printf("Failed ioctl(DMA_BUF_SET_NAME): %s\n", strerror(errno));
-                close(fd);
-                return unique_fd{};
-            }
-        }
-
-        return unique_fd{fd};
-    }
-
-    void readAndCheckDmaBuffer(std::vector<DmaBuffer>* dmabufs, pid_t pid, const std::string name,
-                               size_t fdrefs_size, size_t maprefs_size, const std::string exporter,
-                               size_t refcount, uint64_t buf_size, bool expectFdrefs,
-                               bool expectMapRefs) {
-        EXPECT_TRUE(ReadDmaBufInfo(pid, dmabufs));
-        EXPECT_EQ(dmabufs->size(), 1UL);
-        EXPECT_ONE_BUF_EQ(dmabufs->begin(), name, fdrefs_size, maprefs_size, exporter, refcount,
-                          buf_size);
-        // Make sure the buffer has the right pid too.
-        EXPECT_PID_IN_FDREFS(dmabufs->begin(), pid, expectFdrefs);
-        EXPECT_PID_IN_MAPREFS(dmabufs->begin(), pid, expectMapRefs);
-    }
-
-    bool checkPidRef(DmaBuffer& dmabuf, pid_t pid, int expectFdrefs) {
-        int fdrefs = dmabuf.fdrefs().find(pid)->second;
-        return fdrefs == expectFdrefs;
-    }
-
-  private:
-    int get_ion_heap_mask() {
-        if (ion_fd < 0) {
-            return 0;
-        }
-
-        if (ion_is_legacy(ion_fd)) {
-            // Since ION is still in staging, we've seen that the heap mask ids are also
-            // changed across kernels for some reason. So, here we basically ask for a buffer
-            // from _any_ heap.
-            return ION_HEAP_ANY_MASK;
-        }
-
-        int cnt;
-        int err = ion_query_heap_cnt(ion_fd, &cnt);
-        if (err < 0) {
-            return err;
-        }
-
-        std::vector<ion_heap_data> heaps;
-        heaps.resize(cnt);
-        err = ion_query_get_heaps(ion_fd, cnt, &heaps[0]);
-        if (err < 0) {
-            return err;
-        }
-
-        unsigned int ret = 0;
-        for (auto& it : heaps) {
-            if (!strcmp(it.name, "ion_system_heap")) {
-                ret |= (1 << it.heap_id);
-            }
-        }
-
-        return ret;
-    }
-
-    int ion_fd;
-    const int ion_heap_mask;
-};
-
-TEST_F(DmaBufTester, TestFdRef) {
-    // Test if a dma buffer is found while the corresponding file descriptor
-    // is open
-
-    if (is_using_dmabuf_heaps()) {
-        GTEST_SKIP();
-    }
-
-    ASSERT_TRUE(is_valid());
-    pid_t pid = getpid();
-    std::vector<DmaBuffer> dmabufs;
-    {
-        // Allocate one buffer and make sure the library can see it
-        unique_fd buf = allocate(4096, "dmabuftester-4k");
-        ASSERT_GT(buf, 0) << "Allocated buffer is invalid";
-        ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-
-        EXPECT_EQ(dmabufs.size(), 1UL);
-        EXPECT_ONE_BUF_EQ(dmabufs.begin(), "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL);
-
-        // Make sure the buffer has the right pid too.
-        EXPECT_PID_IN_FDREFS(dmabufs.begin(), pid, true);
-    }
-
-    // Now make sure the buffer has disappeared
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-    EXPECT_TRUE(dmabufs.empty());
-}
-
-TEST_F(DmaBufTester, TestMapRef) {
-    // Test to make sure we can find a buffer if the fd is closed but the buffer
-    // is mapped
-
-    if (is_using_dmabuf_heaps()) {
-        GTEST_SKIP();
-    }
-
-    ASSERT_TRUE(is_valid());
-    pid_t pid = getpid();
-    std::vector<DmaBuffer> dmabufs;
-    {
-        // Allocate one buffer and make sure the library can see it
-        unique_fd buf = allocate(4096, "dmabuftester-4k");
-        ASSERT_GT(buf, 0) << "Allocated buffer is invalid";
-        auto ptr = mmap(0, 4096, PROT_READ, MAP_SHARED, buf, 0);
-        ASSERT_NE(ptr, MAP_FAILED);
-        ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-
-        EXPECT_EQ(dmabufs.size(), 1UL);
-        EXPECT_ONE_BUF_EQ(dmabufs.begin(), "dmabuftester-4k", 1UL, 1UL, "ion", 2UL, 4096ULL);
-
-        // Make sure the buffer has the right pid too.
-        EXPECT_PID_IN_FDREFS(dmabufs.begin(), pid, true);
-        EXPECT_PID_IN_MAPREFS(dmabufs.begin(), pid, true);
-
-        // close the file descriptor and re-read the stats
-        buf.reset(-1);
-        ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-
-        EXPECT_EQ(dmabufs.size(), 1UL);
-        EXPECT_ONE_BUF_EQ(dmabufs.begin(), "<unknown>", 0UL, 1UL, "<unknown>", 0UL, 4096ULL);
-
-        EXPECT_PID_IN_FDREFS(dmabufs.begin(), pid, false);
-        EXPECT_PID_IN_MAPREFS(dmabufs.begin(), pid, true);
-
-        // unmap the bufer and lose all references
-        munmap(ptr, 4096);
-    }
-
-    // Now make sure the buffer has disappeared
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-    EXPECT_TRUE(dmabufs.empty());
-}
-
-TEST_F(DmaBufTester, TestSharedfd) {
-    // Each time a shared buffer is received over a socket, the remote process
-    // will take an extra reference on it.
-
-    if (is_using_dmabuf_heaps()) {
-        GTEST_SKIP();
-    }
-
-    ASSERT_TRUE(is_valid());
-
-    pid_t pid = getpid();
-    std::vector<DmaBuffer> dmabufs;
-    {
-        fd_sharer sharer{};
-        ASSERT_TRUE(sharer.ok());
-        // Allocate one buffer and make sure the library can see it
-        unique_fd buf = allocate(4096, "dmabuftester-4k");
-        ASSERT_GT(buf, 0) << "Allocated buffer is invalid";
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-
-        ASSERT_TRUE(sharer.sendfd(buf));
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 2UL, 4096ULL, true,
-                              false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], pid, 1));
-        readAndCheckDmaBuffer(&dmabufs, sharer.pid(), "dmabuftester-4k", 1UL, 0UL, "ion", 2UL,
-                              4096ULL, true, false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], sharer.pid(), 1));
-
-        ASSERT_TRUE(sharer.sendfd(buf));
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 3UL, 4096ULL, true,
-                              false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], pid, 1));
-        readAndCheckDmaBuffer(&dmabufs, sharer.pid(), "dmabuftester-4k", 1UL, 0UL, "ion", 3UL,
-                              4096ULL, true, false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], sharer.pid(), 2));
-
-        ASSERT_TRUE(sharer.kill());
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-    }
-
-    // Now make sure the buffer has disappeared
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-    EXPECT_TRUE(dmabufs.empty());
-}
-
-TEST_F(DmaBufTester, DupFdTest) {
-    // dup()ing an fd will make this process take an extra reference on the
-    // shared buffer.
-
-    if (is_using_dmabuf_heaps()) {
-        GTEST_SKIP();
-    }
-
-    ASSERT_TRUE(is_valid());
-
-    pid_t pid = getpid();
-    std::vector<DmaBuffer> dmabufs;
-    {
-        // Allocate one buffer and make sure the library can see it
-        unique_fd buf = allocate(4096, "dmabuftester-4k");
-        ASSERT_GT(buf, 0) << "Allocated buffer is invalid";
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-
-        unique_fd buf2{dup(buf)};
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 2UL, 4096ULL, true,
-                              false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], pid, 2));
-
-        close(buf2.release());
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-        EXPECT_TRUE(checkPidRef(dmabufs[0], pid, 1));
-    }
-
-    // Now make sure the buffer has disappeared
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-    EXPECT_TRUE(dmabufs.empty());
-}
-
-TEST_F(DmaBufTester, ForkTest) {
-    // fork()ing a child will cause the child to automatically take a reference
-    // on any existing shared buffers.
-
-    if (is_using_dmabuf_heaps()) {
-        GTEST_SKIP();
-    }
-
-    ASSERT_TRUE(is_valid());
-
-    pid_t pid = getpid();
-    std::vector<DmaBuffer> dmabufs;
-    {
-        // Allocate one buffer and make sure the library can see it
-        unique_fd buf = allocate(4096, "dmabuftester-4k");
-        ASSERT_GT(buf, 0) << "Allocated buffer is invalid";
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-        fd_sharer sharer{};
-        ASSERT_TRUE(sharer.ok());
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 2UL, 4096ULL, true,
-                              false);
-        readAndCheckDmaBuffer(&dmabufs, sharer.pid(), "dmabuftester-4k", 1UL, 0UL, "ion", 2UL,
-                              4096ULL, true, false);
-        ASSERT_TRUE(sharer.kill());
-        readAndCheckDmaBuffer(&dmabufs, pid, "dmabuftester-4k", 1UL, 0UL, "ion", 1UL, 4096ULL, true,
-                              false);
-    }
-
-    // Now make sure the buffer has disappeared
-    ASSERT_TRUE(ReadDmaBufInfo(pid, &dmabufs));
-    EXPECT_TRUE(dmabufs.empty());
-}
-
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    ::android::base::InitLogging(argv, android::base::StderrLogger);
-    return RUN_ALL_TESTS();
+TEST(DmaBufBPF, IteratorLoaded) {
+    android::dmabufinfo::DmabufPerBufferStats stats;
+    ASSERT_TRUE(android::dmabufinfo::GetDmabufBPFStats(stats));
 }

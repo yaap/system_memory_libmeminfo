@@ -24,6 +24,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <dmabufinfo/dmabuf_per_buffer_stats.h>
+
 namespace android {
 namespace dmabufinfo {
 
@@ -91,9 +93,10 @@ struct DmaBuffer {
 // Read and return dmabuf objects for a given process without the help
 // of DEBUGFS
 // Returns false if something went wrong with the function, true otherwise.
-bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs = true,
-                    const std::string& procfs_path = "/proc",
-                    const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>& dmabufs,
+                    const DmabufPerBufferStats& per_buffer_stats,
+                    bool read_fdrefs = true,
+                    const std::string& procfs_path = "/proc");
 
 // Appends new fd-referenced dmabuf objects from a given process to an existing vector.
 // If the vector contains an existing element with a matching inode, the reference
@@ -102,21 +105,25 @@ bool ReadDmaBufInfo(pid_t pid, std::vector<DmaBuffer>* dmabufs, bool read_fdrefs
 // is only possible if the caller has root privileges. On 5.4+ common kernels the caller
 // can read this information with the PTRACE_MODE_READ permission.
 // Returns true on success, otherwise false.
-bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>* dmabufs,
+bool ReadDmaBufFdRefs(int pid, std::vector<DmaBuffer>& dmabufs,
                       const std::string& procfs_path = "/proc");
 
 // Appends new mapped dmabuf objects from a given process to an existing vector.
 // If the vector contains an existing element with a matching inode, the reference
 // counts are updated.
 // Returns true on success, otherwise false.
-bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>* dmabufs,
-                       const std::string& procfs_path = "/proc",
-                       const std::string& dmabuf_sysfs_path = "/sys/kernel/dmabuf/buffers");
+bool ReadDmaBufMapRefs(pid_t pid, std::vector<DmaBuffer>& dmabufs,
+                       const DmabufPerBufferStats& per_buffer_stats,
+                       const std::string& procfs_path = "/proc");
 
 // Writes DmaBuffer info into an existing vector (which will be cleared first.)
 // Will include all DmaBuffers, whether thay are retained or mapped.
 // Returns true on success, otherwise false.
-bool ReadProcfsDmaBufs(std::vector<DmaBuffer>* bufs);
+bool ReadProcfsDmaBufs(std::vector<DmaBuffer>& bufs, const DmabufPerBufferStats& per_buffer_stats);
+
+// Collects total DMA-BUF size referenced by all active processes.
+// Returns true on success.
+bool GetDmabufUserspaceKb(uint64_t& userspace_size);
 
 }  // namespace dmabufinfo
 }  // namespace android
